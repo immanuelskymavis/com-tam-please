@@ -40,6 +40,23 @@ Below that, the customer stands behind the counter and your side of it is a work
 - **The rulebook** lies on the desk. Open it mid-customer; every rule you've been taught is in it,
   along with today's board rate.
 
+## Scoring
+
+Money and score are different numbers on purpose. Đồng across the counter settles against rent;
+the score is what the week is actually played for, and it rewards two things money alone doesn't:
+
+- **Streaks.** Each consecutive correct call adds 15% to the multiplier, up to 2.5×.
+- **Speed.** Calling while the customer is still calm pays up to 60% more than dithering until
+  they're fed up.
+- **Catching a fraud pays.** A correct refusal is worth half the ticket you just avoided losing —
+  and a *wrong* refusal costs you half of one. Without that penalty, refusing everything is free:
+  a day holds 4 customers of whom 2 are frauds, so blind refusal only ever takes 2 strikes and
+  never hits the limit. The score is what punishes it, not the strike counter.
+
+The run ends on a shareable summary — total đồng, accuracy, best streak, and a rank. `src/game/sim.ts`
+plays the week four ways and asserts the spread holds: a flawless week scores ~7.0M, one mistake a
+day ~1.8M, and button-mashing lands under 6% of a perfect run.
+
 ## What's built
 
 Days 1–10, 4 customers each (5 on the last), **41 hand-authored encounters** — about a minute a day.

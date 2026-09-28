@@ -873,3 +873,124 @@ body { margin: 0; font-family: var(--font); color: var(--ink); background: #0b0d
   .title__line { font-size: 62px; }
   .title__right { height: 360px; }
 }
+
+/* ===================== running takings ===================== */
+
+.takings {
+  position: relative;
+  margin: -2px 0 10px; padding: 9px 11px 10px;
+  border-radius: 6px; background: var(--pm-forest);
+  border: 1px solid rgba(143, 202, 43, 0.28);
+  overflow: visible;
+}
+.takings__label {
+  display: block; font-size: 8.5px; letter-spacing: 0.22em;
+  text-transform: uppercase; color: rgba(199, 233, 99, 0.55);
+}
+.takings__value {
+  display: flex; align-items: baseline; gap: 3px; margin-top: 2px;
+  font-size: 21px; font-weight: 800; letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums; color: var(--pm-lime-bright);
+  transition: transform 0.18s ease;
+}
+.takings__value i { font-size: 13px; font-style: normal; opacity: 0.7; }
+.takings.is-up .takings__value { transform: scale(1.05); }
+.takings.is-down .takings__value { color: var(--bad); }
+
+/* the floating +/- that peels off the total */
+.takings__delta {
+  position: absolute; right: 11px; top: 6px;
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  color: var(--pm-lime-bright); pointer-events: none;
+  animation: peel 1.4s ease-out forwards;
+}
+.takings__delta.is-down { color: var(--bad); }
+@keyframes peel {
+  0% { opacity: 0; transform: translateY(6px); }
+  18% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-16px); }
+}
+
+.takings__streak {
+  display: inline-flex; align-items: center; gap: 5px; margin-top: 7px;
+  padding: 2px 8px; border-radius: 999px;
+  background: rgba(255, 147, 69, 0.16); border: 1px solid rgba(255, 147, 69, 0.4);
+  font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--brand);
+}
+.takings__streak i { font-style: normal; opacity: 0.75; }
+
+@media (prefers-reduced-motion: reduce) {
+  .takings__value { transition: none; }
+  .takings__delta { animation-duration: 0.01ms; }
+}
+
+/* ===================== end-of-run summary ===================== */
+
+.summary {
+  min-height: 100vh; display: grid; place-items: center; padding: 24px;
+  position: relative; isolation: isolate;
+  background: #07090a;
+}
+/* The photograph is busy; push it right back so the number carries the screen. */
+.summary::before {
+  content: ''; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(rgba(7, 9, 10, 0.9), rgba(7, 9, 10, 0.97)),
+    url('./assets/bg/stall-shop.jpg') center / cover;
+  filter: saturate(0.55) blur(2px);
+}
+.summary__sheet {
+  width: 100%; max-width: 520px; padding: 34px 34px 30px;
+  border-radius: 18px; text-align: center;
+  background: rgba(15, 18, 16, 0.96);
+  border: 1px solid rgba(143, 202, 43, 0.3);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.75);
+}
+.summary__kicker {
+  font-family: var(--mono); font-size: 10.5px; font-weight: 700;
+  letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-faint);
+}
+.summary__total {
+  display: flex; align-items: baseline; justify-content: center; gap: 6px;
+  margin: 12px 0 4px;
+}
+.summary__totalNum {
+  font-size: 54px; font-weight: 800; letter-spacing: -0.035em; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--pm-lime-bright);
+  text-shadow: 0 0 44px rgba(143, 202, 43, 0.35);
+}
+.summary__dong { font-size: 27px; font-weight: 700; color: rgba(199, 233, 99, 0.6); }
+.summary__rank { margin: 0 0 22px; display: flex; flex-direction: column; gap: 2px; }
+.summary__rank b { font-size: 17px; color: #fff; }
+.summary__rank span { font-size: 13px; color: var(--ink-dim); }
+
+.summary__grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  margin: 0 0 24px; background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; overflow: hidden;
+}
+.summary__grid > div {
+  background: rgba(15, 18, 16, 0.96); padding: 12px 8px;
+  display: flex; flex-direction: column; gap: 3px;
+}
+.summary__grid dt {
+  font-size: 9px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-faint);
+}
+.summary__grid dd {
+  margin: 0; font-size: 19px; font-weight: 700; font-variant-numeric: tabular-nums; color: #fff;
+}
+.summary__grid dd.is-bad { color: var(--bad); }
+.summary__grid dd.is-hot { color: var(--brand); }
+.summary__of { font-size: 12px; color: var(--ink-faint); font-weight: 500; }
+
+.summary__actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.summary__fallback {
+  width: 100%; margin-top: 14px; padding: 10px; border-radius: 6px;
+  background: #0d0f12; color: var(--ink); border: 1px solid var(--line);
+  font-family: var(--mono); font-size: 11.5px; resize: vertical;
+}
+
+@media (max-width: 460px) {
+  .summary__sheet { padding: 24px 18px; }
+  .summary__totalNum { font-size: 40px; }
+  .summary__grid { grid-template-columns: repeat(2, 1fr); }
+}

@@ -164,6 +164,82 @@ const check = (name, got, want) => {
   await page.close()
 }
 
+// 7. One mistake must not end the day — that was the whole point of the rebalance.
+{
+  const { page } = await open('/?day=1&c=1')
+  const next = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('button')]
+        .find((b) => b.textContent?.trim().toLowerCase() === 'next customer')
+        ?.click(),
+    )
+  // c1 is genuine; stamping it is a wrong refusal → strike 1.
+  await dragTo(page, '.tool--stamp', '.desk__phone')
+  await new Promise((r) => setTimeout(r, 600))
+  await next()
+  await new Promise((r) => setTimeout(r, 900))
+  const stillPlaying = await page.evaluate(() => ({
+    onCounter: !!document.querySelector('.booth'),
+    strikes: document.querySelectorAll('.board__strikes .dot.is-on').length,
+  }))
+  const ok = stillPlaying.onCounter && stillPlaying.strikes === 1
+  console.log(
+    `  ${ok ? '✓' : '✗'} ${'one mistake keeps the day alive'.padEnd(42)} ` +
+      `${stillPlaying.strikes} strike, still serving: ${stillPlaying.onCounter}`,
+  )
+  if (!ok) failures++
+  await page.close()
+}
+
+// 8. Three mistakes closes the stall.
+{
+  const { page } = await open('/?day=1&c=1')
+  const next = () =>
+    page.evaluate(() =>
+      [...document.querySelectorAll('button')]
+        .find((b) => b.textContent?.trim().toLowerCase() === 'next customer')
+        ?.click(),
+    )
+  // Day 1 runs good / bad / good / bad, so: refuse, serve, refuse = three wrong.
+  await dragTo(page, '.tool--stamp', '.desk__phone')
+  await new Promise((r) => setTimeout(r, 550)); await next(); await new Promise((r) => setTimeout(r, 800))
+  await dragTo(page, '.tool--plate', '.booth__hatch')
+  await new Promise((r) => setTimeout(r, 550)); await next(); await new Promise((r) => setTimeout(r, 800))
+  await dragTo(page, '.tool--stamp', '.desk__phone')
+  await new Promise((r) => setTimeout(r, 1200))
+
+  const struck = await page.evaluate(() => {
+    const title = document.querySelector('.card__title')?.textContent ?? ''
+    return { onLedger: !!document.querySelector('.ledger'), title }
+  })
+  const ok = struck.onLedger && /three strikes/i.test(struck.title)
+  console.log(
+    `  ${ok ? '✓' : '✗'} ${'three mistakes closes the day'.padEnd(42)} ${struck.title || '(no card)'}`,
+  )
+  if (!ok) failures++
+  await page.close()
+}
+
+// 9. The running total climbs, and a streak multiplies it.
+{
+  const { page } = await open('/?day=1&c=1')
+  const read = () =>
+    page.evaluate(() => {
+      const el = document.querySelector('.takings__value')
+      return Number((el?.textContent ?? '0').replace(/[^0-9-]/g, ''))
+    })
+  const before = await read()
+  await dragTo(page, '.tool--plate', '.booth__hatch')
+  await new Promise((r) => setTimeout(r, 1400))
+  const after = await read()
+  const ok = before === 0 && after > 0
+  console.log(
+    `  ${ok ? '✓' : '✗'} ${'takings counter stacks up'.padEnd(42)} ${before} → ${after}`,
+  )
+  if (!ok) failures++
+  await page.close()
+}
+
 await browser.close()
 console.log(failures ? `\n${failures} failing` : '\ninteractions all good')
 process.exit(failures ? 1 : 0)

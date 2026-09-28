@@ -40,7 +40,9 @@ export type AssetManifest = {
  * /public is served beneath it, so these paths have to be built from it rather
  * than hardcoded absolute — an absolute p('axies/...') 404s on a project Pages site.
  */
-const BASE = import.meta.env.BASE_URL || '/'
+// Optional chaining matters: the headless audit/sim scripts run this module under
+// plain Node, where `import.meta.env` doesn't exist at all.
+const BASE: string = import.meta.env?.BASE_URL || '/'
 const p = (rel: string) => `${BASE}${rel}`.replace(/(?<!:)\/{2,}/g, '/')
 
 const LOCAL: AssetManifest = {

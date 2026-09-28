@@ -600,3 +600,51 @@ build works there untouched.
 
 The full interaction suite passes against the live URL, not just locally:
 `BASE=https://immanuelskymavis.github.io/com-tam-please node scripts/interaction.mjs`.
+
+
+---
+
+## 19. Rebalance — strikes, streaks, and a score worth sharing
+
+**One mistake no longer costs the day.** Rent was the fail condition and the margins were tight
+enough that a single wrong call put you under it. Rent is now flavour and ledger only; **three
+mistakes** closes the stall. Replaying a day rewinds everything that day added, so a retried day is
+scored once rather than once per attempt.
+
+**Money and score split apart.** `earned` is đồng across the counter and settles against rent.
+`score` is the run total, and it rewards what money alone didn't: a 15%-per-call streak multiplier
+capped at 2.5×, and up to +60% for answering while the customer is still calm.
+
+**The run ends on a shareable card** — total đồng, accuracy, best streak, days cleared, and a rank,
+with a Wordle-style block copied to the clipboard (with a selectable textarea fallback, since
+clipboard writes can be refused).
+
+**A running total on the counter** that rolls up to each new value rather than snapping, peels off
+a floating `+`/`−`, and shows the live streak multiplier. It honours `prefers-reduced-motion`.
+
+### The sim caught a real balance hole
+Moving the fail condition to strikes quietly made **refusing everyone a winning strategy**. A day
+holds 4 customers of whom exactly 2 are frauds, so blind refusal takes exactly 2 strikes — always
+under the limit of 3 — and a wrong refusal scored zero, so the strategy cost nothing.
+
+The fix was the incentive, not the allowance: a wrong refusal now costs half the ticket. Blind
+refusal still *survives* the week, which is correct under a score-driven design — you can limp
+through a week badly — but it lands at 4% of a perfect run. The sim asserts that gap rather than
+asserting brute force dies, because "you can finish badly" is the intended shape now.
+
+Measured spread, which the rank thresholds are set against:
+
+| Strategy | Result | Score |
+|---|---|---|
+| Never wrong | finished | 7.0M · *Cô Ba herself* |
+| One mistake every day | finished | 1.8M · *Holding the stall* |
+| Serves everyone | struck out day 10 | 0.4M |
+| Refuses everyone | finished | 0.29M · *Rough week* |
+
+### Also fixed
+- `import.meta.env` is optional-chained in `assets.ts` — the headless audit and sim import that
+  module under plain Node, where it doesn't exist, and the base-path change had broken both.
+- The summary derived the day reached from `daysCleared + 1`, which read "Closed on day 2" after a
+  `?day=10` jump. It uses the actual day now.
+- The drag handler reads patience from a ref rather than the closure, which would otherwise have
+  paid the speed bonus from a stale value.

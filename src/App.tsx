@@ -1,7 +1,17 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from 'react'
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { Button, Intent, Size } from '@axieinfinity/dango'
 import type { State } from './game/store.ts'
-import { initialState, isLastDay, madeRent, reducer } from './game/store.ts'
+import {
+  initialState,
+  isLastDay,
+  madeRent,
+  reducer,
+  runStats,
+  TOTAL_DAYS,
+} from './game/store.ts'
+import { STRIKE_LIMIT } from './game/scoring.ts'
+import { Takings } from './components/Takings.tsx'
+import { RunSummary } from './components/RunSummary.tsx'
 import { patienceForDay, RULES, rulesForDay, shiftForDay } from './game/types.ts'
 import { findDay } from './content/days.ts'
 import { heroDish, lineLabel } from './content/menu.ts'
@@ -17,6 +27,8 @@ export default function App() {
   const [state, dispatch] = useReducer(reducer, initialState)
   const [rulebookOpen, setRulebookOpen] = useState(false)
   const [patience, setPatience] = useState(1)
+  const patienceRef = useRef(1)
+  patienceRef.current = patience
   const [shiftLeft, setShiftLeft] = useState<number | null>(null)
 
   const day = findDay(state.day)
@@ -29,8 +41,13 @@ export default function App() {
   const handleDrop = useCallback(
     (id: string, zone: string) => {
       if (!serving) return
-      if (id === 'plate' && zone === '[data-hatch]') dispatch({ type: 'call', served: true })
-      if (id === 'stamp' && zone === '[data-phone]') dispatch({ type: 'call', served: false })
+      // patienceRef, not `patience` — this callback is memoised and would otherwise
+      // close over a stale value, quietly paying the wrong speed bonus.
+      const left = patienceRef.current
+      if (id === 'plate' && zone === '[data-hatch]')
+        dispatch({ type: 'call', served: true, patienceLeft: left })
+      if (id === 'stamp' && zone === '[data-phone]')
+        dispatch({ type: 'call', served: false, patienceLeft: left })
     },
     [serving],
   )
@@ -122,24 +139,10 @@ export default function App() {
 
   if (state.phase === 'finished') {
     return (
-      <Card
-        kicker="Ten days later"
-        title="The stall survives"
-        body={
-          <p>
-            You can spot a frozen countdown, a stranger's account number, a bank code that
-            lies about its own name and a missing zero on a printed sticker. Grandma would
-            be unbearable about this.
-          </p>
-        }
-        action={
-          <Button
-            text="Play again"
-            intent={Intent.Primary}
-            size={Size.Large}
-            onClick={() => dispatch({ type: 'restart' })}
-          />
-        }
+      <RunSummary
+        stats={runStats(state)}
+        totalDays={TOTAL_DAYS}
+        onReplay={() => dispatch({ type: 'restart' })}
       />
     )
   }
@@ -174,6 +177,7 @@ export default function App() {
         />
 
         <aside className="pp__board">
+          <Takings score={state.score} streak={state.streak} />
           <div className="board__row">
             <span className="board__k">DAY</span>
             <span className="board__v">{String(day.day).padStart(2, '0')}</span>
@@ -199,9 +203,9 @@ export default function App() {
             <span className="board__k">SHIFT ENDS IN</span>
             <span className="board__clock">{formatClock(shiftLeft)}</span>
           </div>
-          <div className="board__strikes">
-            {[0, 1, 2].map((i) => (
-              <span key={i} className={i < state.reputation ? 'dot is-on' : 'dot'} />
+          <div className="board__strikes" title={`${STRIKE_LIMIT} mistakes and the day is over`}>
+            {Array.from({ length: STRIKE_LIMIT }).map((_, i) => (
+              <span key={i} className={i < state.strikes ? 'dot is-on' : 'dot'} />
             ))}
           </div>
         </aside>
@@ -320,14 +324,24 @@ function DayEnd({
   dispatch: React.Dispatch<{ type: 'advanceDay' } | { type: 'retryDay' }>
 }) {
   const day = findDay(state.day)!
-  const cleared = madeRent(state)
+  // Strikes end a day, not rent. Missing rent is a bad night, not a game over.
+  const survived = !state.failedOut
+  const rentCleared = madeRent(state)
   const balance = state.earned - day.rent
+  const dayScore = state.score - state.dayStart.score
 
   return (
     <div className="card">
       <div className="card__inner ledger">
         <span className="card__kicker">Day {day.day} · closing up</span>
-        <h1 className="card__title">{cleared ? "Rent's covered 💸" : "You're short on rent"}</h1>
+        <h1 className="card__title">
+          {!survived
+            ? 'Three strikes — grandma took the keys'
+            : rentCleared
+              ? "Rent's covered 💸"
+              : 'Short on rent, but the stall stands'}
+        </h1>
+
         <dl className="ledger__rows">
           <div className="ledger__row">
             <dt>Taken at the counter</dt>
@@ -337,23 +351,41 @@ function DayEnd({
             <dt>Rent</dt>
             <dd className="mono">−{dong(day.rent)}</dd>
           </div>
-          <div className={`ledger__row ledger__row--total ${cleared ? 'is-good' : 'is-bad'}`}>
-            <dt>{cleared ? 'Left over' : 'Short by'}</dt>
+          <div className={`ledger__row ${rentCleared ? '' : 'is-bad'}`}>
+            <dt>{rentCleared ? 'Left over' : 'Short by'}</dt>
             <dd className="mono">{dong(Math.abs(balance))}</dd>
           </div>
+          <div className="ledger__row">
+            <dt>Mistakes</dt>
+            <dd className={`mono ${state.strikes > 0 ? 'is-bad' : ''}`}>
+              {state.strikes} / {STRIKE_LIMIT}
+            </dd>
+          </div>
+          <div
+            className={`ledger__row ledger__row--total ${survived ? 'is-good' : 'is-bad'}`}
+          >
+            <dt>{survived ? "Added to today's takings" : 'Forfeited on the retry'}</dt>
+            <dd className="mono">{dong(dayScore)}</dd>
+          </div>
         </dl>
-        {!cleared && <p className="muted">Tap below to run the day again</p>}
+
+        <p className="muted">
+          {survived
+            ? `Run total ${dong(state.score)}`
+            : 'Replaying the day rewinds what it earned — nothing is counted twice'}
+        </p>
+
         <div className="card__action">
-          {cleared ? (
+          {survived ? (
             <Button
-              text={isLastDay(state.day) ? 'Finish' : 'Lock up for the night'}
+              text={isLastDay(state.day) ? 'Finish the week' : 'Lock up for the night'}
               intent={Intent.Primary}
               size={Size.Large}
               onClick={() => dispatch({ type: 'advanceDay' })}
             />
           ) : (
             <Button
-              text="Try the day again"
+              text="Open up again"
               intent={Intent.Primary}
               size={Size.Large}
               onClick={() => dispatch({ type: 'retryDay' })}
