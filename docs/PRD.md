@@ -564,3 +564,39 @@ Every counter scene in the screenshot harness now asserts that the countdown sit
 is on screen, and that the last receipt row is inside too. This class of bug — content growing until
 a tell silently drops off the bottom — has now happened twice, and both times the DOM looked
 perfectly healthy while the thing was simply not where anyone could see it.
+
+
+---
+
+## 18. Shipped to GitHub Pages
+
+**Live: https://immanuelskymavis.github.io/com-tam-please/** — repo
+`immanuelskymavis/com-tam-please`, deployed from the `gh-pages` branch via `npm run deploy`.
+
+### Why the Artifact build broke
+The published artifact rendered everything *except* the Axies. The split was diagnostic: food photos
+and street backgrounds appeared (they load as `<img>` and CSS `url()`), while every Spine skeleton
+was missing — and Spine is the only thing that loads over `fetch()`. The artifact sandbox's CSP
+permits images and stylesheets but blocks `fetch`/XHR, so the skeleton, atlas and texture requests
+never completed. GitHub Pages is an ordinary origin with no such restriction, which is why the same
+build works there untouched.
+
+### What deploying required
+- **Base path.** A project Pages site is served from `/<repo>/`. `public/` asset URLs are now built
+  from `import.meta.env.BASE_URL`, and the two street photographs moved into `src/assets/` so Vite
+  rewrites and hashes them in the CSS.
+- **Actions workflow not installed.** The available token lacks `workflow` scope, so
+  `.github/workflows/` could not be pushed. The workflow is kept at
+  `docs/github-pages-workflow.yml` for one-click enablement; deployment meanwhile runs from the
+  `gh-pages` branch, which needs no special scope.
+
+### Two bugs caught before they shipped
+1. **`deploy.sh` derived the base from the local folder name** (`axie-paymoji`) rather than the repo
+   name (`com-tam-please`). The build succeeded and would have produced a page where every asset
+   404s. Now taken from the git remote.
+2. **The street-seating test hardcoded `/food/che.jpg`.** Correct behaviour, wrong assertion: under
+   a base prefix the path is `/com-tam-please/food/che.jpg`. It now compares filenames, so the same
+   suite passes against both the dev server and the deployed site.
+
+The full interaction suite passes against the live URL, not just locally:
+`BASE=https://immanuelskymavis.github.io/com-tam-please node scripts/interaction.mjs`.

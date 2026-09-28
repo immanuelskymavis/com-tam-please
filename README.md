@@ -1,5 +1,7 @@
 # Cơm Tấm, Please
 
+**▶ Play: https://immanuelskymavis.github.io/com-tam-please/**
+
 You're an Axie running a cơm tấm stall in Saigon. Tourists pay by QR, and you never see the money
 land — you see their phone, and you decide whether to believe it.
 
@@ -144,6 +146,29 @@ one in a scannable code.**
 The static/dynamic distinction is the mechanical basis for day 5, not a metaphor: a dynamic payload
 carries tag `54` (the amount) and a static one does not, because a printed sticker can't know what
 you ordered.
+
+## Deploying
+
+```bash
+npm run deploy
+```
+
+Builds and force-pushes to the `gh-pages` branch, which GitHub Pages serves.
+
+Two things that will silently produce a blank page if you change them:
+
+- **The base path.** A project Pages site is served from `/<repo>/`, not the domain root, so the
+  build needs `BASE_PATH=/<repo>/`. `scripts/deploy.sh` derives that from the **git remote**, not the
+  local folder name — those differ in this checkout, and using the folder name ships a page whose
+  every asset 404s.
+- **Where assets live.** Files in `public/` are served verbatim under that base, so
+  `src/lib/assets.ts` builds their URLs from `import.meta.env.BASE_URL`. The two street photographs
+  live in `src/assets/` instead, so Vite rewrites and hashes them in the CSS automatically.
+
+`docs/github-pages-workflow.yml` is a GitHub Actions workflow that does the same thing on every push
+to `main`, and runs the typecheck, content audit and difficulty sim first. It isn't installed —
+adding it needs a token with `workflow` scope. To enable it, copy it to `.github/workflows/deploy.yml`
+(the GitHub web editor can create it directly) and switch Pages to "GitHub Actions" as its source.
 
 ## Assets and licence
 

@@ -148,14 +148,17 @@ const check = (name, got, want) => {
     dishes: [...document.querySelectorAll('.stoolDish')].map((d) => d.getAttribute('src')),
   }))
   // Two served, one refused: two stools, and each plate is that customer's own order.
+  // Compare filenames, not full paths — the deployed build serves assets under a
+  // base prefix (/<repo>/) that the local dev server doesn't have.
+  const names = street.dishes.map((d) => d.split('/').pop())
   const ok =
     street.stools === 2 &&
-    street.dishes.length === 2 &&
-    street.dishes.includes('/food/che.jpg') &&
-    street.dishes.includes('/food/comtam.jpg')
+    names.length === 2 &&
+    names.includes('che.jpg') &&
+    names.includes('comtam.jpg')
   console.log(
     `  ${ok ? '✓' : '✗'} ${'refused customers never sit down'.padEnd(42)} ` +
-      `${street.stools} seated, ${street.dishes.map((d) => d.split('/').pop()).join(' + ')}`,
+      `${street.stools} seated, ${names.join(' + ')}`,
   )
   if (!ok) failures++
   await page.close()
