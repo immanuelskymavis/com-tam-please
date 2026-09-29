@@ -289,16 +289,22 @@ const check = (name, got, want) => {
     const done = await page.evaluate(() => {
       if (document.querySelector('.summary')) return true
       const btn = [...document.querySelectorAll('button')].find((b) =>
-        /next customer|finish the week|lock up|open up again/i.test(b.textContent ?? ''),
+        /next customer|finish the week|lock up|open up again|start the day/i.test(b.textContent ?? ''),
       )
       if (btn) { btn.click(); return false }
       return null
     })
     if (done === true) break
     if (done === null) {
-      const { call: verdictCall } = await call(page)
-      if (verdictCall === 'serve') await dragTo(page, '.tool--plate', '.booth__hatch')
-      else await dragTo(page, '.tool--stamp', '.desk__phone')
+      // The shift clock can close the day between the read and the drag, taking
+      // the desk with it. That's the game working, not a failure — try again.
+      try {
+        const { call: verdictCall } = await call(page)
+        if (verdictCall === 'serve') await dragTo(page, '.tool--plate', '.booth__hatch')
+        else await dragTo(page, '.tool--stamp', '.desk__phone')
+      } catch {
+        /* the counter went away mid-step */
+      }
     }
     await new Promise((r) => setTimeout(r, 260))
   }
