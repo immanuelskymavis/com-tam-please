@@ -72,6 +72,10 @@ export function RunSummary({
           <span className="summary__totalNum">{stats.score.toLocaleString('en-US')}</span>
           <span className="summary__dong">₫</span>
         </div>
+        <p className="summary__paid">
+          <i className="pmNote__mark" aria-hidden="true" />
+          Profit from the stall plus your bonus from <b>paymoji</b>
+        </p>
         <p className="summary__rank">
           <b>{rank.title}</b>
           <span>{rank.blurb}</span>
@@ -109,7 +113,7 @@ export function RunSummary({
 
         <dl className="summary__grid">
           <div>
-            <dt>Correct calls</dt>
+            <dt>Clean calls</dt>
             <dd>{stats.correct}</dd>
           </div>
           <div>

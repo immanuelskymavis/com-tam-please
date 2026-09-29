@@ -2,11 +2,14 @@ import { useEffect, useRef, useState } from 'react'
 import { streakMultiplier } from '../game/scoring.ts'
 
 /**
- * The run total, counting up.
+ * The weekly subtotal, counting up.
  *
  * A number that just swaps value reads as a label; one that rolls up to it reads
  * as money landing in the till. The roll is short and eased so it lands well
  * before the next customer, and it respects prefers-reduced-motion.
+ *
+ * The chip beside it is the live PayMoji bonus rate, because the multiplier is
+ * the thing you can actually change mid-shift.
  */
 export function Takings({ score, streak }: { score: number; streak: number }) {
   const [shown, setShown] = useState(score)
@@ -57,8 +60,27 @@ export function Takings({ score, streak }: { score: number; streak: number }) {
   const lost = delta !== null && delta < 0
 
   return (
-    <div className={`takings ${gained ? 'is-up' : ''} ${lost ? 'is-down' : ''}`}>
-      <span className="takings__label">Takings</span>
+    <div
+      className={`takings ${gained ? 'is-up' : ''} ${lost ? 'is-down' : ''} ${
+        shown < 0 ? 'is-negative' : ''
+      }`}
+    >
+      {/* The chip rides on the label's line: the board column has no spare
+          height, and a chip that only appears on a streak would shunt the
+          strike dots under the desk the moment it did. */}
+      <span className="takings__head">
+        <span className="takings__label">Week so far</span>
+        {streak >= 2 && (
+          <span
+            className="takings__streak"
+            title={`${streak} correct in a row — PayMoji is paying ×${streakMultiplier(streak).toFixed(2)}`}
+          >
+            <i className="takings__pm" aria-hidden="true" />
+            paymoji
+            <b>×{streakMultiplier(streak).toFixed(2)}</b>
+          </span>
+        )}
+      </span>
       <span className="takings__value">
         {shown.toLocaleString('en-US')}
         <i>₫</i>
@@ -68,13 +90,6 @@ export function Takings({ score, streak }: { score: number; streak: number }) {
         <span key={`${score}`} className={`takings__delta ${lost ? 'is-down' : ''}`}>
           {delta > 0 ? '+' : '−'}
           {Math.abs(delta).toLocaleString('en-US')}
-        </span>
-      )}
-
-      {streak >= 2 && (
-        <span className="takings__streak" title="Consecutive correct calls">
-          🔥 {streak}
-          <i>×{streakMultiplier(streak).toFixed(2)}</i>
         </span>
       )}
     </div>

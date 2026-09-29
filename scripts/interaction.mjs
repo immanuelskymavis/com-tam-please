@@ -277,13 +277,22 @@ const check = (name, got, want) => {
       const el = document.querySelector('.takings__value')
       return Number((el?.textContent ?? '0').replace(/[^0-9-]/g, ''))
     })
+  // The day opens in the red — rent comes out when the shutters go up — so the
+  // counter has to climb out of that hole, not up from zero.
+  const rent = await page.evaluate(
+    () => Number((document.querySelectorAll('.board__row--paid .board__v')[0]?.textContent ?? '0').replace(/[^0-9]/g, '')),
+  )
   const before = await read()
   await dragTo(page, '.tool--plate', '.booth__hatch')
   await new Promise((r) => setTimeout(r, 1400))
   const after = await read()
-  const ok = before === 0 && after > 0
+  const bonus = await page.evaluate(
+    () => Number((document.querySelector('.board__v.is-bonus')?.textContent ?? '0').replace(/[^0-9]/g, '')),
+  )
+  const ok = rent > 0 && before === -rent && after > before && bonus > 0
   console.log(
-    `  ${ok ? '✓' : '✗'} ${'takings counter stacks up'.padEnd(42)} ${before} → ${after}`,
+    `  ${ok ? '✓' : '✗'} ${'week total climbs out of the rent'.padEnd(42)} ` +
+      `${before} → ${after} (rent ${rent}, paymoji bonus ${bonus})`,
   )
   if (!ok) failures++
   await page.close()
@@ -382,6 +391,41 @@ const check = (name, got, want) => {
   console.log(
     `  ${ok ? '✓' : '✗'} ${'a clean day is three stars'.padEnd(42)} ` +
       `${card ? `${card.won}/3, ${card.caption}` : 'no day rating'}`,
+  )
+  if (!ok) failures++
+  await page.close()
+}
+
+// 12b. The closing ledger has to add up: profit + PayMoji bonus = your salary.
+{
+  const { page } = await open('/?day=1&c=1')
+  await playUntil(page, () => !!document.querySelector('.dayStars'))
+  await new Promise((r) => setTimeout(r, 700))
+  const book = await page.evaluate(() => {
+    const num = (label) => {
+      const row = [...document.querySelectorAll('.ledger__row')].find(
+        (r) => r.querySelector('dt')?.textContent?.trim().toLowerCase().startsWith(label),
+      )
+      const raw = row?.querySelector('dd')?.textContent?.trim() ?? ''
+      const sign = /^[−-]/.test(raw) ? -1 : 1
+      return sign * Number(raw.replace(/[^0-9]/g, ''))
+    }
+    return {
+      gross: num('gross revenue'),
+      rent: num('rent'),
+      profit: num('profit'),
+      bonus: num('bonus from'),
+      salary: num('your salary'),
+      brand: (document.querySelector('.ledger__row--pm')?.textContent ?? '').toLowerCase(),
+    }
+  })
+  const ok =
+    book.gross - Math.abs(book.rent) === book.profit &&
+    book.profit + book.bonus === book.salary &&
+    book.brand.includes('paymoji')
+  console.log(
+    `  ${ok ? '✓' : '✗'} ${'the closing ledger adds up'.padEnd(42)} ` +
+      `${book.gross} − ${Math.abs(book.rent)} = ${book.profit}, +${book.bonus} = ${book.salary}`,
   )
   if (!ok) failures++
   await page.close()

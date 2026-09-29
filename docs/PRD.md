@@ -777,3 +777,60 @@ The shared block now carries the per-day line too: `★★★ ★★☆ ★★�
 3. **The screenshot harness leaked storage between scenes.** Chrome launches on a fresh profile but
    every scene shares it, so the scene that seeds a best week to photograph the title chip was
    still in storage when the summary scene ran. It puts the keys back now.
+
+
+---
+
+## 22. The week is a P&L, and PayMoji is on it
+
+The scoring worked but it didn't say anything. There was "money at the counter" and there was an
+abstract "score", the two were unrelated, and rent was a number you cleared or didn't with no
+consequence either way. The fiction — you've taken over grandma's stall and you're trying to run it
+at a profit for a week, using PayMoji to take payments — was nowhere in the arithmetic.
+
+So the closing card is a small P&L now, and every line is a real number the game already had:
+
+```
+Gross revenue        150,000 ₫     đồng across the counter
+Rent                 −40,000 ₫     a fixed cost, ~25% of gross
+Profit               110,000 ₫
+Bonus from paymoji  +380,593 ₫     speed · streaks · catching fraud
+Your salary today    490,593 ₫
+Weekly subtotal so far
+```
+
+**The award splits in two.** `money` is revenue and `bonus` is what PayMoji pays on top. A served
+customer books their ticket as revenue and everything the multipliers add above 1× as bonus. A
+correctly refused one books *no* revenue at all — there was no sale — so the entire reward is
+PayMoji paying you for catching something their receipt was trying to tell you. Getting scammed
+takes the ticket straight off the top line; a wrong refusal is docked from the bonus.
+
+**Rent came down from 70% of gross to 25%**, and it's charged the moment the shutters go up rather
+than settled at closing. Two reasons. It's no longer a hurdle — the stall is in the black on all
+but a disastrous day, which is what the brief asked for. And paying it up front is what makes the
+running total on the counter honest all day: you open at −40,000 ₫ and climb out, instead of
+watching a number that quietly owes rent it hasn't mentioned.
+
+That does mean rent now affects the score, which it never used to. It's in `perfectDayScore` too,
+so the ceiling pays rent as well and the stars are unmoved by it.
+
+**PayMoji is on screen where the money is**, not only on the phone: the bonus is its own lime row
+on the closing card with the day's clean-call count under it, its own line on the counter board,
+a chip on the running total showing the live multiplier, a chip on every verdict slip, and a note
+on the morning card explaining why the day opens in the red. The title card says the quiet part
+out loud — the PayMoji team pays a bonus for being quick and accurate with their product.
+
+Balance after the change, over 40 dealt weeks: flawless play 80% of ceiling (was 81%), one mistake
+a day 31% (was 34%), serve-everyone out on day 2, refuse-everyone out on day 3. Star curve
+unchanged at 0–1 → ★★★, 2–3 → ★★, 4–5 → ★.
+
+### Bugs this pass surfaced
+1. **The PayMoji bonus chip pushed the strike dots under the desk.** Same overflow as last pass,
+   with a new trigger: the chip only appears once you're two calls into a streak, so the board fit
+   perfectly at the start of every day and broke the moment you did well. It now rides on the
+   label's line with its height reserved, so the column is the same height whether or not you have
+   a streak going — and the screenshot harness has a scene that plays two calls specifically to
+   photograph the board in that state.
+2. **A `?c=` demo jump paid rent twice on restart.** `initialState` pre-pays rent for a jump
+   straight to the counter, since `beginDay` never runs; "Run it again" then went through the
+   morning card, which charges it properly. Both paths now go through one `freshRun()`.

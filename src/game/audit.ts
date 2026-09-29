@@ -51,11 +51,12 @@ export function audit() {
       const good = day.encounters.filter((e) => e.violation === null)
       if (good.length === 0) problems.push(`${where}: no honest customers at all`)
       const earnable = good.reduce((sum, e) => sum + e.ticket.total, 0)
-      // Rent should sit around 70% of a perfect day so one wrong call stings
-      // without being instantly fatal.
-      if (day.rent / earnable > 0.85) {
-        problems.push(`${where}: rent is ${((day.rent / earnable) * 100).toFixed(0)}% of a perfect day — too tight`)
-      }
+      // Rent is a fixed cost on a day you're meant to run at a profit: it has to
+      // stay small enough that the stall is almost always in the black, and big
+      // enough to still be a line worth reading.
+      const share = day.rent / earnable
+      if (share > 0.35) problems.push(`${where}: rent is ${(share * 100).toFixed(0)}% of gross — too heavy to stay profitable`)
+      if (share < 0.15) problems.push(`${where}: rent is ${(share * 100).toFixed(0)}% of gross — not worth printing`)
     }
   }
 

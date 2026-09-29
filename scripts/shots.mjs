@@ -62,6 +62,9 @@ const SCENES = {
   citation: { url: at(1, 2), wait: 'stage', drag: ['.tool--plate', '.booth__hatch'], settle: 900 },
   refused: { url: at(3, 6), wait: 'stage', drag: ['.tool--stamp', '.desk__phone'], settle: 700 },
   ledger: { url: at(1, 1), wait: 'stage', playDay: true },
+  // Mid-shift with a streak going: the PayMoji bonus chip appears here, and it
+  // is the one thing that can grow the board column and hide the strike dots.
+  streak: { url: at(1, 1), wait: 'stage', playCalls: 2 },
   // The whole week, so the star screen is captured from a real run rather than a fixture.
   summary: { url: at(1, 1), wait: 'stage', playWeek: true },
   // Mid-drag: the drop zones have to light up while the tool is still in hand.
@@ -210,6 +213,29 @@ for (const [name, scene] of Object.entries(scenes)) {
     const ok = await dragTo(page, scene.drag[0], scene.drag[1])
     if (!ok) { console.log(`  ! ${name}: could not drag ${scene.drag[0]} → ${scene.drag[1]}`); failures++ }
     await new Promise((r) => setTimeout(r, scene.settle ?? 800))
+  }
+
+  if (scene.playCalls) {
+    for (let i = 0; i < scene.playCalls; i++) {
+      const verdict = await page.evaluate(
+        (src) => new Function(`return (${src})`)()().call,
+        decide.toString(),
+      )
+      const ok =
+        verdict === 'serve'
+          ? await dragTo(page, '.tool--plate', '.booth__hatch')
+          : await dragTo(page, '.tool--stamp', '.desk__phone')
+      if (!ok) { console.log(`  ! ${name}: could not play call ${i + 1}`); failures++; break }
+      await new Promise((r) => setTimeout(r, 600))
+      await page.evaluate(() =>
+        [...document.querySelectorAll('button')]
+          .find((b) => b.textContent?.trim() === 'Next customer')
+          ?.click(),
+      )
+      await new Promise((r) => setTimeout(r, 800))
+    }
+    const chip = await page.evaluate(() => !!document.querySelector('.takings__streak'))
+    if (!chip) { console.log(`  ! ${name}: no PayMoji bonus chip after a streak`); failures++ }
   }
 
   if (scene.playDay || scene.playWeek) {

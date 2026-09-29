@@ -171,12 +171,21 @@ function buildDayOne(): DayDef {
   return { ...withRent(encounters), day: 1, postedRate: RATE, intro: PLAN[0].intro }
 }
 
-/** Rent is 70% of what the honest customers are worth, so a slip stings without ending you. */
+/**
+ * Rent is a quarter of what the honest customers are worth.
+ *
+ * It used to be 70% and it used to be the fail condition; now it's a fixed cost
+ * on a day you're trying to run at a profit. Low enough that the stall is in the
+ * black on all but a disastrous day, high enough that it's a real line on the
+ * ledger and a day with three scams on it can still go red.
+ */
+export const RENT_SHARE = 0.25
+
 function withRent(encounters: Encounter[]) {
   const earnable = encounters
     .filter((e) => e.violation === null)
     .reduce((sum, e) => sum + e.ticket.total, 0)
-  return { encounters, rent: Math.round((earnable * 0.7) / 5_000) * 5_000 }
+  return { encounters, rent: Math.round((earnable * RENT_SHARE) / 5_000) * 5_000 }
 }
 
 /**

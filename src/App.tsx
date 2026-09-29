@@ -5,7 +5,7 @@ import {
   dayCeiling,
   initialState,
   isLastDay,
-  madeRent,
+  profitToday,
   reducer,
   runStats,
   scoredToday,
@@ -125,6 +125,14 @@ export default function App() {
               Rent tonight: <strong>{dong(day.rent)}</strong> · Board rate today:{' '}
               <strong className="mono">{day.postedRate.toLocaleString('en-US')} ₫/$</strong>
             </p>
+            <p className="pmNote">
+              <span className="pmNote__head">
+                <i className="pmNote__mark" aria-hidden="true" />
+                paymoji
+              </span>
+              Rent comes out the moment you open up, so the day starts in the red. Clear
+              payments quickly and call them right and PayMoji's bonus more than covers it.
+            </p>
             {newRules.length > 0 && (
               <>
                 {newRules.length > 1 && (
@@ -207,17 +215,25 @@ export default function App() {
           <Takings score={state.score} streak={state.streak} />
           <DayTrack day={state.day} cleared={state.daysCleared} compact />
           <div className="board__row">
-            <span className="board__k">TAKEN</span>
+            <span className="board__k">GROSS</span>
             <span className={`board__v ${state.earned >= day.rent ? 'is-clear' : ''}`}>
               {state.earned.toLocaleString('en-US')}
             </span>
           </div>
-          <div className="board__row">
-            <span className="board__k">RENT</span>
-            <span className="board__v">{day.rent.toLocaleString('en-US')}</span>
+          {/* Rent came out when the shutters went up, so it's a note, not a goal. */}
+          <div className="board__row board__row--paid">
+            <span className="board__k">RENT PAID</span>
+            <span className="board__v">−{day.rent.toLocaleString('en-US')}</span>
           </div>
-          <div className="board__bar">
-            <i style={{ width: `${Math.min(100, (state.earned / day.rent) * 100)}%` }} />
+          <div className="board__row board__row--pm">
+            <span className="board__k">
+              <i className="board__pm" aria-hidden="true" />
+              PAYMOJI BONUS
+            </span>
+            <span className="board__v is-bonus">
+              {state.bonus < 0 ? '−' : '+'}
+              {Math.abs(state.bonus).toLocaleString('en-US')}
+            </span>
           </div>
           <div className="board__row board__row--rate">
             <span className="board__k">RATE</span>
@@ -318,7 +334,10 @@ function Verdict({
             ) : (
               <>
                 <strong>Honest customer turned away</strong>
-                <span>That payment was fine. They walked off hungry</span>
+                <span>
+                  That payment was fine. They walked off hungry, and PayMoji docked you{' '}
+                  {dong(Math.abs(outcome.award?.bonus ?? 0))}
+                </span>
               </>
             )
           ) : (
@@ -326,10 +345,18 @@ function Verdict({
               <strong>
                 {rule ? rule.label : outcome.encounter.ticket.lines.map(lineLabel).join(', ')}
               </strong>
-              <span>
-                {outcome.reaction === 'served'
-                  ? `+${dong(outcome.encounter.ticket.total)}`
-                  : 'Nothing lost'}
+              <span className="citation__split">
+                {outcome.reaction === 'served' ? (
+                  <em>+{dong(outcome.encounter.ticket.total)} revenue</em>
+                ) : (
+                  <em>Nothing lost</em>
+                )}
+                {(outcome.award?.bonus ?? 0) > 0 && (
+                  <b className="citation__bonus">
+                    <i className="pmNote__mark" aria-hidden="true" />
+                    +{dong(outcome.award!.bonus)} paymoji
+                  </b>
+                )}
               </span>
             </>
           )}
@@ -348,14 +375,17 @@ function DayEnd({
   dispatch: React.Dispatch<{ type: 'advanceDay' } | { type: 'retryDay' }>
 }) {
   const day = findDay(state.day)!
-  // Strikes end a day, not rent. Missing rent is a bad night, not a game over.
+  // Strikes end a day, not the books. A day in the red is a bad day, not a loss.
   const survived = !state.failedOut
-  const rentCleared = madeRent(state)
-  const balance = state.earned - day.rent
-  const dayScore = scoredToday(state)
+  const profit = profitToday(state)
+  const inTheBlack = profit >= 0
+  // Salary is what the day actually paid you: the stall's profit plus PayMoji's
+  // bonus for clearing their payments quickly and correctly.
+  const salary = scoredToday(state)
   const ceiling = dayCeiling(state)
   const stars = survived ? starsToday(state) : 0
-  const share = ceiling > 0 ? Math.max(0, dayScore) / ceiling : 0
+  const share = ceiling > 0 ? Math.max(0, salary) / ceiling : 0
+  const cleanCalls = state.correct - state.dayStart.correct
 
   return (
     <div className="card">
@@ -370,9 +400,9 @@ function DayEnd({
         <h1 className="card__title">
           {!survived
             ? 'Three strikes — grandma took the keys'
-            : rentCleared
-              ? "Rent's covered 💸"
-              : 'Short on rent, but the stall stands'}
+            : inTheBlack
+              ? 'Payday 💸'
+              : 'In the red tonight'}
         </h1>
 
         {/* Today, rated against a flawless run of today — see perfectDayScore. */}
@@ -387,17 +417,38 @@ function DayEnd({
 
         <dl className="ledger__rows">
           <div className="ledger__row">
-            <dt>Taken at the counter</dt>
+            <dt>Gross revenue</dt>
             <dd className="mono">{dong(state.earned)}</dd>
           </div>
           <div className="ledger__row">
             <dt>Rent</dt>
             <dd className="mono">−{dong(day.rent)}</dd>
           </div>
-          <div className={`ledger__row ${rentCleared ? '' : 'is-bad'}`}>
-            <dt>{rentCleared ? 'Left over' : 'Short by'}</dt>
-            <dd className="mono">{dong(Math.abs(balance))}</dd>
+          <div className={`ledger__row ledger__row--sub ${inTheBlack ? '' : 'is-bad'}`}>
+            <dt>Profit</dt>
+            <dd className="mono">
+              {profit < 0 ? '−' : ''}
+              {dong(Math.abs(profit))}
+            </dd>
           </div>
+
+          <div className={`ledger__row ledger__row--pm ${state.bonus < 0 ? 'is-bad' : ''}`}>
+            <dt>
+              <span className="pmRow">
+                <i className="pmRow__mark" aria-hidden="true" />
+                Bonus from <b>paymoji</b>
+              </span>
+              <small>
+                {cleanCalls} clean {cleanCalls === 1 ? 'call' : 'calls'} · best streak{' '}
+                {state.dayBest} · paid for speed and accuracy
+              </small>
+            </dt>
+            <dd className="mono">
+              {state.bonus < 0 ? '−' : '+'}
+              {dong(Math.abs(state.bonus))}
+            </dd>
+          </div>
+
           <div className="ledger__row">
             <dt>Mistakes</dt>
             <dd className={`mono ${state.strikes > 0 ? 'is-bad' : ''}`}>
@@ -405,16 +456,19 @@ function DayEnd({
             </dd>
           </div>
           <div
-            className={`ledger__row ledger__row--total ${survived ? 'is-good' : 'is-bad'}`}
+            className={`ledger__row ledger__row--total ${survived && salary >= 0 ? 'is-good' : 'is-bad'}`}
           >
-            <dt>{survived ? "Added to today's takings" : 'Forfeited on the retry'}</dt>
-            <dd className="mono">{dong(dayScore)}</dd>
+            <dt>{survived ? 'Your salary today' : 'Forfeited on the retry'}</dt>
+            <dd className="mono">
+              {salary < 0 ? '−' : ''}
+              {dong(Math.abs(salary))}
+            </dd>
           </div>
         </dl>
 
         <p className="muted">
           {survived
-            ? `Run total ${dong(state.score)}`
+            ? `Weekly subtotal so far ${dong(state.score)}`
             : 'Replaying the day rewinds what it earned — nothing is counted twice'}
         </p>
 

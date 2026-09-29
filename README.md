@@ -2,8 +2,11 @@
 
 **▶ Play: https://immanuelskymavis.github.io/com-tam-please/**
 
-You're an Axie running a cơm tấm stall in Saigon. Tourists pay by QR, and you never see the money
-land — you see their phone, and you decide whether to believe it.
+You're an Axie running a cơm tấm stall in Saigon, with one week to make it pay. Tourists settle by
+QR, and you never see the money land — you see their phone, and you decide whether to believe it.
+
+Rent comes out of the till; **PayMoji pays you a bonus for being quick and accurate with their
+product**, and that bonus is where most of a good week comes from.
 
 A Papers, Please-style inspection game built on PayMoji's real payment flow and first-party Axie assets.
 Design rationale and the full rule ladder live in [docs/PRD.md](docs/PRD.md).
@@ -59,22 +62,36 @@ day's honest customers are worth, so a dealt day can't come out unwinnable.
 A stage timeline on the morning card, the closing card and the counter board shows which day you're
 on and how much week is left.
 
-## Scoring
+## How you get paid
 
-Money and score are different numbers on purpose. Đồng across the counter settles against rent;
-the score is what the week is actually played for, and it rewards two things money alone doesn't:
+You've taken over the stall and you have a week to run it at a profit. Two things pay you, and the
+closing card keeps them apart:
 
-- **Streaks.** Each consecutive correct call adds 15% to the multiplier, up to 2.5×.
+| | |
+|---|---|
+| **Gross revenue** | đồng across the counter — what the customers you served actually paid |
+| **Rent** | a fixed cost, about a quarter of gross. It comes out the moment you open up, so every day starts in the red |
+| **Profit** | gross less rent: what the stall itself made |
+| **Bonus from PayMoji** | what PayMoji pays on top for clearing their payments quickly and calling them right |
+| **Your salary today** | profit + bonus |
+| **Weekly subtotal** | the salaries banked so far |
+
+PayMoji's bonus is the part you control minute to minute:
+
 - **Speed.** Calling while the customer is still calm pays up to 60% more than dithering until
   they're fed up.
-- **Catching a fraud pays.** A correct refusal is worth half the ticket you just avoided losing —
-  and a *wrong* refusal costs you half of one. Without that penalty, refusing everything is close to
-  free: it survives the early days on two strikes apiece and banks every catch. The score is what
-  punishes it, not the strike counter.
+- **Streaks.** Each consecutive correct call adds 15% to the multiplier, up to 2.5×.
+- **Accuracy.** Catching a fraud is worth half the ticket you just avoided losing — there's no sale,
+  so the whole thing is bonus. A *wrong* refusal is docked half a ticket instead. Without that
+  penalty, refusing everything is close to free: it survives the early days on two strikes apiece
+  and banks every catch.
+
+Serving a fraud hits the top line directly — the food went out and the money never arrived — and
+resets the streak, so it costs you twice.
 
 **Stars, per day and per week.** Each day closes with its own rating, measured against a flawless,
 instant run of *that* day from the streak you walked in with — so a long streak lifts the day's
-score and its ceiling by the same factor and cancels out, and Monday is as three-starrable as
+salary and its ceiling by the same factor and cancels out, and Monday is as three-starrable as
 Friday. The run then ends on a star screen rating the whole week the same way. Three stars at 70%
 of the ceiling, two at 45%, one at 20%.
 
@@ -87,31 +104,30 @@ throughout and the game plays identically when it returns nothing (a private win
 data).
 
 `src/game/sim.ts` plays 40 dealt weeks four ways and asserts the spread holds: flawless play lands
-at 81% of the ceiling and always finishes, one mistake a day at 34% and still finishes, and neither
+at 80% of the ceiling and always finishes, one mistake a day at 31% and still finishes, and neither
 brute-force strategy gets past day 3 or above 3%. It also checks the curve in between — stars by
 mistakes made in the week: **0–1 → ★★★, 2–3 → ★★, 4–5 → ★** — and that dithering through a flawless
 week earns two stars rather than three, so speed keeps mattering.
 
 ## What's built
 
-Days 1–10, 4 customers each (5 on the last), **41 hand-authored encounters** — about a minute a day.
-Nine rules, one per day, none of them ever retiring:
+Five days, 28 customers, about a minute a day. Nine rules, none of them ever retiring — day 1
+teaches one, days 2–4 teach two or three at a time, and day 5 is the exam.
 
-| Day | Rule | The tell |
-|-----|------|----------|
-| 1 | Amount must match the ticket | Receipt total ≠ what they ordered |
-| 2 | Receipt must still be live | Payment expired before it settled |
-| 3 | Paid to *your* account | It went to the phở place two doors down |
-| 4 | Live receipt, not a screenshot | A live receipt counts down; a screenshot is frozen |
-| 5 | Sticker days: check the typed amount | A printed QR carries no amount, so they type it |
-| 6 | Transaction ID must be new | One receipt shown twice, for two plates |
-| 7 | Rate must match the board | The printed rate disagrees with the board, or the maths doesn't work |
-| 8 | Bank name must match its code | It says Vietcombank next to 970422, which is MB Bank |
-| 9 | Must settle in đồng | Marked sent, but settled in baht — it never reached you |
-| 10 | *(no new rule)* | Everything at once, a tighter clock, and someone who deserves better |
+| Rule | Taught | The tell |
+|------|--------|----------|
+| Amount must match the ticket | day 1 | Receipt total ≠ what they ordered |
+| Receipt must still be live | day 2 | Payment expired before it settled |
+| Paid to *your* account | day 2 | It went to the phở place two doors down |
+| Live receipt, not a screenshot | day 3 | A live receipt counts down; a screenshot is frozen |
+| Sticker days: check the typed amount | day 3 | A printed QR carries no amount, so they type it |
+| Transaction ID must be new | day 3 | One receipt shown twice, for two plates |
+| Rate must match the board | day 4 | The printed rate disagrees with the board, or the maths doesn't work |
+| Bank name must match its code | day 4 | It says Vietcombank next to 970422, which is MB Bank |
+| Must settle in đồng | day 4 | Marked sent, but settled in baht — it never reached you |
 
-
-Adding a day is pure content — append to `src/content/days.ts`, then run the audit.
+Adding a fraud variant or an honest customer is pure content — append to `src/content/pools.ts`,
+then run the audit, which will deal 200 weeks and tell you if it broke anything.
 
 ## Look and feel
 

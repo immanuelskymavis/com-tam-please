@@ -312,8 +312,8 @@ body { margin: 0; font-family: var(--font); color: var(--ink); background: #0b0d
 .pp__board {
   background: linear-gradient(#22262d, #171a1f);
   border-left: 3px solid #0b0d10;
-  padding: 10px 12px 8px;
-  display: flex; flex-direction: column; gap: 5px;
+  padding: 9px 12px 6px;
+  display: flex; flex-direction: column; gap: 4px;
   font-family: var(--mono);
   /* Not clipped: the takings counter peels a +N above its own top edge. The
      column still has to fit, and shots.mjs fails the run if it stops fitting. */
@@ -325,10 +325,10 @@ body { margin: 0; font-family: var(--font); color: var(--ink); background: #0b0d
 .board__v.is-clear { color: var(--pm-lime-bright); }
 .board__bar { height: 4px; border-radius: 999px; background: #0d0f12; overflow: hidden; margin: 1px 0 3px; }
 .board__bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--pm-lime), var(--pm-lime-bright)); transition: width 0.3s; }
-.board__row--rate { padding-top: 5px; border-top: 1px dashed var(--line); }
+.board__row--rate { padding-top: 3px; border-top: 1px dashed var(--line); }
 .board__row--rate .board__v { font-size: 12.5px; color: var(--brand); }
 .board__shift {
-  margin-top: 6px; padding: 6px 9px; border-radius: 5px;
+  margin-top: 3px; padding: 3px 9px; border-radius: 5px;
   background: #0d0f12; border: 1px solid var(--line);
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
 }
@@ -339,7 +339,7 @@ body { margin: 0; font-family: var(--font); color: var(--ink); background: #0b0d
 .board__shift.is-low { border-color: var(--bad); animation: clockPulse 1s ease-in-out infinite; }
 .board__shift.is-low .board__clock { color: var(--bad); }
 @keyframes clockPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.55; } }
-.board__strikes { display: flex; gap: 6px; margin-top: 7px; }
+.board__strikes { display: flex; gap: 6px; margin-top: 5px; }
 .dot { width: 9px; height: 9px; border-radius: 50%; background: #0d0f12; border: 1px solid var(--line); }
 .dot.is-on { background: var(--bad); border-color: var(--bad); }
 
@@ -890,18 +890,23 @@ body { margin: 0; font-family: var(--font); color: var(--ink); background: #0b0d
 
 .takings {
   position: relative;
-  margin: -1px 0 5px; padding: 7px 10px 8px;
+  margin: -1px 0 4px; padding: 6px 10px 7px;
   border-radius: 6px; background: var(--pm-forest);
   border: 1px solid rgba(143, 202, 43, 0.28);
   overflow: visible;
 }
+/* Reserve the chip's line whether or not there's a streak, so the column's
+   height never changes mid-shift. */
+.takings__head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 16px; }
 .takings__label {
-  display: block; font-size: 8.5px; letter-spacing: 0.22em;
+  /* Both of these must stay on one line: the chip appearing on a streak would
+     otherwise wrap the label and push the strike dots under the desk. */
+  display: block; font-size: 8px; letter-spacing: 0.12em; white-space: nowrap;
   text-transform: uppercase; color: rgba(199, 233, 99, 0.55);
 }
 .takings__value {
   display: flex; align-items: baseline; gap: 3px; margin-top: 1px;
-  font-size: 19px; font-weight: 800; letter-spacing: -0.02em;
+  font-size: 17px; font-weight: 800; letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums; color: var(--pm-lime-bright);
   transition: transform 0.18s ease;
 }
@@ -924,12 +929,13 @@ body { margin: 0; font-family: var(--font); color: var(--ink); background: #0b0d
 }
 
 .takings__streak {
-  display: inline-flex; align-items: center; gap: 5px; margin-top: 7px;
-  padding: 2px 8px; border-radius: 999px;
-  background: rgba(255, 147, 69, 0.16); border: 1px solid rgba(255, 147, 69, 0.4);
-  font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--brand);
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 1px 5px; border-radius: 999px;
+  background: rgba(143, 202, 43, 0.16); border: 1px solid rgba(143, 202, 43, 0.45);
+  font-size: 8.5px; font-weight: 800; letter-spacing: -0.02em;
+  color: var(--pm-lime-bright); white-space: nowrap; flex: 0 0 auto;
 }
-.takings__streak i { font-style: normal; opacity: 0.75; }
+.takings__streak b { font-family: var(--mono); font-weight: 700; letter-spacing: 0.02em; }
 
 @media (prefers-reduced-motion: reduce) {
   .takings__value { transition: none; }
@@ -1172,3 +1178,90 @@ body { margin: 0; font-family: var(--font); color: var(--ink); background: #0b0d
 @media (prefers-reduced-motion: reduce) {
   .dayStars__s.is-won { animation: none; }
 }
+
+/* ---- the closing card's P&L, with PayMoji's line in it ----------------- */
+.ledger__row--sub { border-bottom: 2px solid var(--line); }
+.ledger__row--sub dt, .ledger__row--sub dd { font-weight: 700; }
+.ledger__row--pm {
+  align-items: flex-start;
+  margin: 2px -12px; padding: 12px; border-radius: 8px; border-bottom: none;
+  background: linear-gradient(90deg, rgba(143, 202, 43, 0.14), rgba(143, 202, 43, 0.04));
+  border-left: 3px solid var(--pm-lime);
+}
+.ledger__row--pm dt { display: flex; flex-direction: column; gap: 3px; color: var(--ink); }
+.ledger__row--pm dd { color: var(--pm-lime-bright); font-weight: 700; }
+.ledger__row--pm.is-bad dd { color: var(--bad); }
+.ledger__row--pm small {
+  font-size: 11px; color: var(--ink-faint); font-weight: 400; letter-spacing: 0.01em;
+}
+.pmRow { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+.pmRow b {
+  font-weight: 800; letter-spacing: -0.03em; color: var(--pm-lime-bright);
+}
+.pmRow__mark {
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--pm-lime); box-shadow: 0 0 0 2px rgba(143, 202, 43, 0.22);
+}
+
+/* ---- PayMoji on the counter board -------------------------------------- */
+.board__row--pm { padding-bottom: 3px; border-bottom: 1px dashed var(--line); }
+.board__row--pm .board__k { display: inline-flex; align-items: center; gap: 5px; color: rgba(199, 233, 99, 0.7); }
+.board__pm {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--pm-lime);
+  box-shadow: 0 0 0 2px rgba(143, 202, 43, 0.2);
+}
+.board__v.is-bonus { color: var(--pm-lime-bright); }
+.takings__pm {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--pm-lime);
+  box-shadow: 0 0 0 2px rgba(143, 202, 43, 0.25);
+}
+
+/* a negative subtotal is a hole you're climbing out of, and should look like one */
+.takings.is-negative .takings__value { color: var(--bad); }
+.takings.is-negative { border-color: rgba(245, 69, 64, 0.35); }
+.board__row--paid .board__k, .board__row--paid .board__v {
+  color: var(--ink-faint); font-size: 10px; font-weight: 500;
+}
+.board__row--paid .board__k { font-size: 9px; }
+
+/* ---- PayMoji notes on the cards ---------------------------------------- */
+.title__pmPitch {
+  max-width: 430px; margin: 16px 0 0; padding: 12px 14px;
+  border-radius: 10px; border-left: 3px solid var(--pm-lime);
+  background: linear-gradient(90deg, rgba(143, 202, 43, 0.14), rgba(143, 202, 43, 0.03));
+  font-size: 13.5px; line-height: 1.55; color: var(--ink);
+}
+.title__pmPitchHead {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: 7px;
+  font-weight: 800; letter-spacing: -0.03em; color: var(--pm-lime-bright);
+}
+.pmNote {
+  margin: 14px 0 0 !important; padding: 12px 14px;
+  border-radius: 10px; border-left: 3px solid var(--pm-lime);
+  background: linear-gradient(90deg, rgba(143, 202, 43, 0.13), rgba(143, 202, 43, 0.03));
+  font-size: 13.5px !important; line-height: 1.55;
+}
+.pmNote__head {
+  display: inline-flex; align-items: center; gap: 6px; margin-right: 7px;
+  font-weight: 800; letter-spacing: -0.03em; color: var(--pm-lime-bright);
+}
+.pmNote__mark {
+  width: 12px; height: 12px; border-radius: 50%; background: var(--pm-lime);
+  box-shadow: 0 0 0 2px rgba(143, 202, 43, 0.22);
+}
+.summary__paid {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  margin: 0 0 12px; font-size: 12px; color: var(--ink-dim);
+}
+.summary__paid b { font-weight: 800; letter-spacing: -0.03em; color: var(--pm-lime-bright); }
+
+/* the slip splits what the stall made from what PayMoji paid on top */
+.citation__split { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.citation__split em { font-style: normal; }
+.citation__bonus {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 2px 8px; border-radius: 999px; font-weight: 800; letter-spacing: -0.01em;
+  background: rgba(143, 202, 43, 0.16); border: 1px solid rgba(143, 202, 43, 0.4);
+  color: var(--pm-lime-deep);
+}
+.citation__bonus .pmNote__mark { width: 9px; height: 9px; box-shadow: none; }

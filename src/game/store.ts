@@ -18,11 +18,19 @@ export type State = {
   phase: Phase
   day: number
   index: number
-  /** Đồng taken today, reset each morning. Settles against rent at closing. */
+  /** Gross revenue today: đồng across the counter, before rent. */
   earned: number
+  /** What PayMoji has paid you today for speed, streaks and accurate calls. */
+  bonus: number
+  /** Longest streak reached today, for the closing card's bonus line. */
+  dayBest: number
   /** Wrong calls today. Hitting STRIKE_LIMIT ends the day — rent no longer can. */
   strikes: number
-  /** Run total you're actually playing for, carried across days. */
+  /**
+   * Weekly subtotal: the salaries banked so far plus today's so far. Today's
+   * rent is taken off the moment the day opens, so this is always the honest
+   * number rather than one that only settles at closing.
+   */
   score: number
   /**
    * Run tallies as today opened, so replaying a day doesn't double-count it.
@@ -85,13 +93,22 @@ function openingPhase(): Phase {
   return startingIndex(startingDay()) === null ? 'title' : 'serving'
 }
 
+/**
+ * A `?c=` jump drops straight into `serving` and never runs `beginDay`, so the
+ * rent for the day being jumped into has to come off here instead.
+ */
+const openingRent = (): number =>
+  openingPhase() === 'serving' ? (findDay(startingDay())?.rent ?? 0) : 0
+
 export const initialState: State = {
   phase: openingPhase(),
   day: startingDay(),
   index: startingIndex(startingDay()) ?? 0,
   earned: 0,
+  bonus: 0,
+  dayBest: 0,
   strikes: 0,
-  score: 0,
+  score: -openingRent(),
   dayStart: { score: 0, correct: 0, wrong: 0, walkouts: 0, streak: 0 },
   dayStars: [],
   streak: 0,
@@ -105,6 +122,18 @@ export const initialState: State = {
   fed: [],
   lastOutcome: null,
 }
+
+/**
+ * A run that opens on the morning card. `initialState` may have pre-paid rent
+ * for a `?c=` jump straight to the counter; starting over goes through
+ * `beginDay`, which charges it, so that has to be undone or it is paid twice.
+ */
+const freshRun = (): State => ({
+  ...initialState,
+  day: startingDay(),
+  phase: 'morning',
+  score: 0,
+})
 
 export type Action =
   | { type: 'start' }
@@ -121,14 +150,19 @@ export type Action =
 export function reducer(state: State, action: Action): State {
   switch (action.type) {
     case 'start':
-      return { ...initialState, day: startingDay(), phase: 'morning' }
+      return freshRun()
 
-    case 'beginDay':
+    case 'beginDay': {
+      // Rent is due the moment you open the shutters, not at closing. Paying it
+      // up front is what makes the counter's running total honest all day.
+      const rent = findDay(state.day)?.rent ?? 0
       return {
         ...state,
         phase: 'serving',
         index: 0,
         earned: 0,
+        bonus: 0,
+        dayBest: 0,
         strikes: 0,
         failedOut: false,
         dayStart: {
@@ -138,10 +172,12 @@ export function reducer(state: State, action: Action): State {
           walkouts: state.walkouts,
           streak: state.streak,
         },
+        score: state.score - rent,
         usedTxIds: [],
         fed: [],
         lastOutcome: null,
       }
+    }
 
     case 'call': {
       const day = findDay(state.day)
@@ -170,9 +206,11 @@ export function reducer(state: State, action: Action): State {
         phase: strikes >= STRIKE_LIMIT ? 'dayEnd' : 'feedback',
         failedOut: strikes >= STRIKE_LIMIT,
         earned: state.earned + scored.money,
-        score: state.score + scored.points,
+        bonus: state.bonus + scored.bonus,
+        score: state.score + scored.money + scored.bonus,
         streak: scored.streak,
         bestStreak: Math.max(state.bestStreak, scored.streak),
+        dayBest: Math.max(state.dayBest, scored.streak),
         correct: state.correct + (outcome.correct ? 1 : 0),
         wrong: state.wrong + (scored.strike ? 1 : 0),
         strikes,
@@ -230,6 +268,8 @@ export function reducer(state: State, action: Action): State {
         dayStars,
         index: 0,
         earned: 0,
+        bonus: 0,
+        dayBest: 0,
         strikes: 0,
         failedOut: false,
         usedTxIds: [],
@@ -246,9 +286,13 @@ export function reducer(state: State, action: Action): State {
         phase: 'morning',
         index: 0,
         earned: 0,
+        bonus: 0,
+        dayBest: 0,
         strikes: 0,
         failedOut: false,
         streak: 0,
+        // Back to before this day opened — including its rent, which the retry
+        // will charge again when the shutters go up.
         score: state.dayStart.score,
         correct: state.dayStart.correct,
         wrong: state.dayStart.wrong,
@@ -259,7 +303,7 @@ export function reducer(state: State, action: Action): State {
       }
 
     case 'restart':
-      return { ...initialState, day: startingDay(), phase: 'morning' }
+      return freshRun()
   }
 }
 
@@ -273,11 +317,14 @@ export const scoredToday = (state: State) => state.score - state.dayStart.score
 
 export const starsToday = (state: State) => starsForDay(scoredToday(state), dayCeiling(state))
 
-/** Did the player clear rent for the day they just finished? Flavour now, not fate. */
-export function madeRent(state: State): boolean {
+/** Gross revenue less rent: what the stall itself made today. */
+export function profitToday(state: State): number {
   const day = findDay(state.day)
-  return day ? state.earned >= day.rent : false
+  return state.earned - (day?.rent ?? 0)
 }
+
+/** Did the stall cover its own rent today, before PayMoji's bonus? */
+export const madeRent = (state: State) => profitToday(state) >= 0
 
 /** A day is survivable unless the strikes ran out. Rent no longer ends a run. */
 export const survivedDay = (state: State) => !state.failedOut

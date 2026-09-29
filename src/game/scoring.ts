@@ -2,12 +2,19 @@ import type { CallOutcome } from './validate.ts'
 import type { DayDef } from './types.ts'
 
 /**
- * What a call is worth.
+ * What a call is worth, as a small P&L.
  *
- * Money and score are deliberately different numbers. `earned` is real đồng across
- * the counter and settles against rent; `score` is what you're playing for over the
- * whole run, and it rewards two things the money alone doesn't: being right
- * repeatedly, and being quick about it.
+ * You've taken over grandma's stall and you're trying to have a profitable week.
+ * Two things pay you, and they're deliberately separate numbers:
+ *
+ *   money  — đồng across the counter. Gross revenue. Rent comes out of it, and
+ *            what's left is the day's profit.
+ *   bonus  — what PayMoji pays you on top, because you're clearing their
+ *            payments quickly and calling them correctly. Speed, streaks and
+ *            catching fraud all land here, and a wrong refusal is docked from it.
+ *
+ *   salary today  = (gross − rent) + bonus
+ *   weekly subtotal = the salaries banked so far
  */
 
 /** Each consecutive correct call adds this much multiplier… */
@@ -38,10 +45,10 @@ export const speedFactor = (patienceLeft: number) =>
   1 + SPEED_MAX_BONUS * Math.min(1, Math.max(0, patienceLeft))
 
 export type Award = {
-  /** Đồng actually taken at the counter — settles against rent. */
+  /** Đồng across the counter. Gross revenue; rent comes out of the day's total. */
   money: number
-  /** Points toward the run total. */
-  points: number
+  /** What PayMoji pays on top for speed, streaks and accurate calls. */
+  bonus: number
   /** Streak after this call. */
   streak: number
   /** Did this count against the day's three strikes? */
@@ -63,9 +70,10 @@ export function award(
 
   switch (outcome.reaction) {
     case 'served':
+      // The ticket is revenue; everything the multipliers add on top is PayMoji's.
       return {
         money: ticketTotal,
-        points: Math.round(ticketTotal * scale),
+        bonus: Math.round(ticketTotal * (scale - 1)),
         streak: streakBefore + 1,
         strike: false,
         multiplier,
@@ -73,10 +81,11 @@ export function award(
       }
 
     case 'refusedFairly':
-      // No sale, but you kept the plate and the money you'd have lost.
+      // No sale at all, so no revenue — the whole reward is PayMoji paying you
+      // for catching something their receipt was trying to tell you.
       return {
         money: 0,
-        points: Math.round(ticketTotal * CATCH_SHARE * scale),
+        bonus: Math.round(ticketTotal * CATCH_SHARE * scale),
         streak: streakBefore + 1,
         strike: false,
         multiplier,
@@ -84,13 +93,14 @@ export function award(
       }
 
     case 'scammedYou':
-      // Food went out, money never arrived.
-      return { money: -ticketTotal, points: -ticketTotal, streak: 0, strike: true, multiplier, speed }
+      // Food went out, money never arrived: straight off the top line.
+      return { money: -ticketTotal, bonus: 0, streak: 0, strike: true, multiplier, speed }
 
     case 'refusedUnfairly':
+      // No revenue lost, but PayMoji docks you for turning away a good payment.
       return {
         money: 0,
-        points: -Math.round(ticketTotal * WRONG_REFUSAL_PENALTY),
+        bonus: -Math.round(ticketTotal * WRONG_REFUSAL_PENALTY),
         streak: 0,
         strike: true,
         multiplier,
@@ -100,7 +110,7 @@ export function award(
     case 'walkedOut':
       // They gave up waiting. Costs you the sale and the streak, but you didn't
       // wrong anyone, so it isn't a strike.
-      return { money: 0, points: 0, streak: 0, strike: false, multiplier, speed }
+      return { money: 0, bonus: 0, streak: 0, strike: false, multiplier, speed }
   }
 }
 
@@ -138,16 +148,17 @@ export function perfectScore(days: readonly DayDef[]): number {
 }
 
 /**
- * The ceiling for one day, played flawlessly and instantly from the streak you
- * walked in with.
+ * The best salary one day could pay: every call right, every call instant, rent
+ * still due.
  *
  * Taking the incoming streak as given is what makes a day's stars about *this
- * day*: a long streak lifts the day's score and its ceiling by the same factor,
+ * day*: a long streak lifts the day's salary and its ceiling by the same factor,
  * so it cancels, and Monday can be three-starred as easily as Friday.
  */
 export function perfectDayScore(day: DayDef, streakBefore = 0): number {
   let streak = Math.max(0, streakBefore)
-  let total = 0
+  // Rent is due whatever kind of day you have, so the ceiling pays it too.
+  let total = -day.rent
   for (const e of day.encounters) {
     const base = e.violation === null ? e.ticket.total : e.ticket.total * CATCH_SHARE
     total += Math.round(base * streakMultiplier(streak) * speedFactor(1))
@@ -203,11 +214,12 @@ export function shareText(stats: RunStats, totalDays: number, url: string): stri
   return [
     `Cơm Tấm, Please — ${stats.daysCleared}/${totalDays} days`,
     '⭐'.repeat(stars) + '·'.repeat(3 - stars),
-    dong(stats.score) + `  (${Math.round(shareOfMax(stats) * 100)}% of perfect)`,
+    `${dong(stats.score)} earned  (${Math.round(shareOfMax(stats) * 100)}% of perfect)`,
     '',
     stats.dayStars.map(starBlock).join(' ') || '—',
     `✅ ${stats.correct}   ❌ ${stats.wrong}   🚶 ${stats.walkouts}`,
     `🔥 Best streak ${stats.bestStreak}`,
+    `💚 Stall profit + bonus from PayMoji`,
     `🍚 ${rank.title}`,
     '',
     url,

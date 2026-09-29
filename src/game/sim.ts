@@ -71,8 +71,9 @@ function play(mode: Strategy, patience = PATIENCE, slipBudget = 0) {
       const day = findDay(s.day)!
       log.push(
         `  day ${s.day}: ${s.strikes}/${STRIKE_LIMIT} strikes · ` +
-          `took ${dong(s.earned)} vs rent ${dong(day.rent)}${madeRent(s) ? '' : ' (short)'} · ` +
-          `run ${dong(s.score)}${s.failedOut ? '  ← STRUCK OUT' : ''}`,
+          `gross ${dong(s.earned)} − rent ${dong(day.rent)}` +
+          `${madeRent(s) ? '' : ' (in the red)'} + paymoji ${dong(s.bonus)} · ` +
+          `week ${dong(s.score)}${s.failedOut ? '  ← STRUCK OUT' : ''}`,
       )
       if (s.failedOut) break
       s = run(s, { type: 'advanceDay' })

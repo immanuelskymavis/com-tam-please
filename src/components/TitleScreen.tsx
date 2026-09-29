@@ -34,8 +34,19 @@ export function TitleScreen({ onStart }: { onStart: () => void }) {
           </h1>
 
           <p className="title__blurb">
-            Grandma left you the stall. Tourists pay by QR, and you never see the money
-            land — you see their phone, and you decide whether to believe it.
+            Grandma left you the stall and one week to make it pay. Tourists settle by QR,
+            and you never see the money land — you see their phone, and you decide whether
+            to believe it.
+          </p>
+
+          <p className="title__pmPitch">
+            <span className="title__pmPitchHead">
+              <i className="title__pmMark" />
+              paymoji
+            </span>
+            The PayMoji team will pay you a bonus for being quick and accurate with their
+            product — clear a real payment fast, catch a fake one, and it lands on top of
+            your takings.
           </p>
 
           <div className="title__meta">
