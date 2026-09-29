@@ -732,3 +732,48 @@ score down, and the sim still asserts the score gap rather than the death.
    is exactly what a dealt week does to a heuristic that was only ever right by coincidence.
 4. **The morning card only showed the first new rule** (`RULES.find(r => r.day === day)`), which was
    correct when a day taught one thing and silently dropped two of three once it didn't.
+
+
+---
+
+## 21. A rating per day, and one number that survives the run
+
+Two additions, both about giving a five-day week somewhere to put its results.
+
+**Every day gets its own three stars.** The day's score is measured against
+`perfectDayScore(day, streakAtDayStart)` — a flawless, instant run of *that day* from the streak
+you actually carried in. Taking the incoming streak as given is the whole design of it: a long
+streak multiplies the day's score and its ceiling by the same factor, so it cancels, and day 1 is
+exactly as three-starrable as day 5. Without that, a rating would mostly be measuring how well the
+previous days went.
+
+Same thresholds as the week (70 / 45 / 20), so three stars means one thing everywhere. The rating
+lands on the closing card with the percentage beside it, and the earned stars then hang under that
+day's node on the stage timeline for the rest of the run — the level-select read, where you can see
+at a glance which day is worth going back for.
+
+Stars are banked on `advanceDay`, not at `dayEnd`. A day you strike out of has to be replayed, and
+only the attempt you walk away from should count — the same reason the retry rewinds the score.
+
+**Your best week persists.** `localStorage`, one key, guarded everywhere: it throws in a private
+window and comes back empty after a clear, so every read and write is wrapped and the game has to
+play identically when it returns nothing. It shows as a chip on the title card and as a line on the
+end screen, which says either "beat your best of …" or "your best is still …". The stored record
+keeps the share of ceiling alongside the absolute score, because the absolute number is what a high
+score means to a person while the share is the honest comparison between two differently-dealt
+weeks.
+
+The shared block now carries the per-day line too: `★★★ ★★☆ ★★★ ★☆☆ ★★☆`.
+
+### Bugs this pass surfaced
+1. **StrictMode ate the "new best" badge.** `useState(() => recordRun(stats))` looks like a
+   run-once initialiser, and in React's StrictMode it is called twice: the first call wrote the new
+   best, the second read it back, found it wasn't beaten, and returned `isBest: false` — which is
+   the result React keeps. The badge never appeared in development, and would have appeared in
+   production, which is the worse version of the bug. `recordRun` now memoises by run signature:
+   recording the same run twice is the same event.
+2. **The title card still advertised ten days, nine rules and 41 customers.** Those numbers are now
+   read from `allDays()` and `RULES` so they can't drift from the content again.
+3. **The screenshot harness leaked storage between scenes.** Chrome launches on a fresh profile but
+   every scene shares it, so the scene that seeds a best week to photograph the title chip was
+   still in storage when the summary scene ran. It puts the keys back now.

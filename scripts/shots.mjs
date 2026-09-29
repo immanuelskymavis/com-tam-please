@@ -32,6 +32,23 @@ const at = (day, c) => `/?${SEED}&day=${day}${c ? `&c=${c}` : ''}`
 
 const SCENES = {
   title: { url: '/', wait: 'title' },
+  // Chrome launches on a fresh profile, so the best-week chip only appears if
+  // we put one there first.
+  titleBest: {
+    url: '/',
+    wait: 'title',
+    storage: {
+      'com-tam-please:best:v1': JSON.stringify({
+        score: 5_149_814,
+        stars: 3,
+        share: 0.81,
+        daysCleared: 5,
+        bestStreak: 28,
+        accuracy: 100,
+        at: '2026-09-29',
+      }),
+    },
+  },
   morning: { url: at(3), wait: 'title', click: 'Open the stall' },
   counter: { url: at(1, 1), wait: 'stage' },
   sticker: { url: at(3, 6), wait: 'stage' },
@@ -96,6 +113,14 @@ for (const [name, scene] of Object.entries(scenes)) {
   page.on('console', (m) => m.type() === 'error' && errors.push(m.text()))
   page.on('pageerror', (e) => errors.push(String(e)))
 
+  if (scene.storage) {
+    // Same origin, so a throwaway load is enough to get a handle on localStorage.
+    await page.goto(BASE + '/', { waitUntil: 'domcontentloaded', timeout: 30_000 })
+    await page.evaluate((entries) => {
+      for (const [k, v] of Object.entries(entries)) localStorage.setItem(k, v)
+    }, scene.storage)
+  }
+
   await page.goto(BASE + scene.url, { waitUntil: 'networkidle2', timeout: 30_000 })
 
   if (scene.wait === 'stage') {
@@ -119,6 +144,17 @@ for (const [name, scene] of Object.entries(scenes)) {
       console.log(`  ! ${name}: no .card appeared`)
       failures++
     })
+  }
+
+  if (scene.storage) {
+    const chip = await page.evaluate(() => {
+      const el = document.querySelector('.title__best')
+      if (!el) return null
+      const b = el.getBoundingClientRect()
+      return { text: el.textContent?.replace(/\s+/g, ' ').trim(), onScreen: b.bottom <= window.innerHeight && b.width > 0 }
+    })
+    if (!chip) { console.log(`  ! ${name}: no best-week chip although one is stored`); failures++ }
+    else if (!chip.onScreen) { console.log(`  ! ${name}: best-week chip is off screen`); failures++ }
   }
 
   if (scene.rulebook) {
@@ -313,6 +349,14 @@ for (const [name, scene] of Object.entries(scenes)) {
       )
       failures++
     }
+  }
+
+  // Pages share one browser profile, so a scene that seeds storage has to put
+  // it back — otherwise a later scene quietly runs against someone else's best.
+  if (scene.storage) {
+    await page.evaluate((keys) => {
+      for (const k of keys) localStorage.removeItem(k)
+    }, Object.keys(scene.storage))
   }
 
   const stage = await page.evaluate(() => {

@@ -12,6 +12,7 @@ export function DayTrack({
   cleared,
   compact = false,
   failedDay,
+  stars,
 }: {
   /** The day being played right now. */
   day: number
@@ -20,6 +21,8 @@ export function DayTrack({
   compact?: boolean
   /** Marks the day that ended in three strikes, so a retry reads as a retry. */
   failedDay?: number
+  /** Stars per banked day, in order. Shown under the nodes at full size. */
+  stars?: number[]
 }) {
   const days = Array.from({ length: TOTAL_DAYS }, (_, i) => i + 1)
   // Counted off the day you're on, not off what's banked: a replayed day would
@@ -37,6 +40,15 @@ export function DayTrack({
           return (
             <li key={d} className={`track__stage ${state}`}>
               <span className="track__node">{done && !failed ? '✓' : d}</span>
+              {!compact && stars?.[d - 1] !== undefined && (
+                <span className="track__stars" aria-label={`${stars[d - 1]} of 3 stars`}>
+                  {[1, 2, 3].map((k) => (
+                    <b key={k} className={k <= stars[d - 1] ? 'is-won' : ''}>
+                      ★
+                    </b>
+                  ))}
+                </span>
+              )}
               <span className="track__tick" aria-hidden="true" />
             </li>
           )

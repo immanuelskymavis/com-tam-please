@@ -8,6 +8,8 @@ import {
   starsFor,
   type RunStats,
 } from '../game/scoring.ts'
+import { recordRun, type BestRun } from '../lib/bestRun.ts'
+import { dong } from '../lib/format.ts'
 
 /**
  * End of the run. The number is the point of the screen, so it gets the room —
@@ -23,6 +25,8 @@ export function RunSummary({
   onReplay: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  // Recorded once, on mount: a re-render must not re-save or re-announce it.
+  const [best] = useState<{ previous: BestRun | null; isBest: boolean }>(() => recordRun(stats))
   const rank = rankFor(stats)
   const stars = starsFor(stats)
   const pctOfMax = shareOfMax(stats)
@@ -60,6 +64,8 @@ export function RunSummary({
             : `Closed on day ${stats.dayReached}`}
         </span>
 
+        {best.isBest && <span className="summary__badge">New best</span>}
+
         <Stars earned={stars} />
 
         <div className="summary__total">
@@ -83,6 +89,23 @@ export function RunSummary({
             {Math.round(pctOfMax * 100)}% of a perfect week ({stats.maxScore.toLocaleString('en-US')} ₫)
           </span>
         </div>
+
+        {stats.dayStars.length > 0 && (
+          <ol className="summary__days">
+            {stats.dayStars.map((n, i) => (
+              <li key={i} className={`summary__day stars--${n}`}>
+                <span className="summary__dayNum">Day {i + 1}</span>
+                <span className="summary__dayStars">
+                  {[1, 2, 3].map((k) => (
+                    <b key={k} className={k <= n ? 'is-won' : ''}>
+                      ★
+                    </b>
+                  ))}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
 
         <dl className="summary__grid">
           <div>
@@ -113,6 +136,16 @@ export function RunSummary({
             </dd>
           </div>
         </dl>
+
+        <p className="summary__best">
+          {best.previous === null
+            ? best.isBest
+              ? 'First week on the books — this is the one to beat'
+              : 'No best week recorded yet'
+            : best.isBest
+              ? `Beat your best of ${dong(best.previous.score)}`
+              : `Your best is still ${dong(best.previous.score)} · ${'★'.repeat(best.previous.stars)}${'☆'.repeat(3 - best.previous.stars)}`}
+        </p>
 
         <div className="summary__actions">
           <Button

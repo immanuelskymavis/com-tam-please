@@ -41,6 +41,39 @@ async function dragTo(page, fromSel, toSel) {
   await page.mouse.up()
 }
 
+/**
+ * Play by the rules until `stop` says we're there (or we run out of patience with
+ * it). Clicks whatever card button is in front of it, so it walks day to day.
+ */
+async function playUntil(page, stop, steps = 80) {
+  for (let i = 0; i < steps; i++) {
+    if (await page.evaluate(stop)) return true
+    const clicked = await page.evaluate(() => {
+      const btn = [...document.querySelectorAll('button')].find((b) =>
+        /next customer|finish the week|lock up|open up again|start the day/i.test(
+          b.textContent ?? '',
+        ),
+      )
+      if (!btn) return false
+      btn.click()
+      return true
+    })
+    if (!clicked) {
+      // The shift clock can close the day between the read and the drag, taking
+      // the desk with it. That's the game working, not a failure — try again.
+      try {
+        const { call: verdictCall } = await call(page)
+        if (verdictCall === 'serve') await dragTo(page, '.tool--plate', '.booth__hatch')
+        else await dragTo(page, '.tool--stamp', '.desk__phone')
+      } catch {
+        /* the counter went away mid-step */
+      }
+    }
+    await new Promise((r) => setTimeout(r, 260))
+  }
+  return page.evaluate(stop)
+}
+
 /** What the reference player would do with whatever is on the counter right now. */
 const call = (page) => page.evaluate(new Function(`return (${decide.toString()})()`))
 
@@ -326,6 +359,104 @@ const check = (name, got, want) => {
   console.log(
     `  ${ok ? '✓' : '✗'} ${'stars agree with the score meter'.padEnd(42)} ` +
       `${end ? `${end.won}/3 at ${pct}%, ${end.total} ₫` : 'never got there'}`,
+  )
+  if (!ok) failures++
+  await page.close()
+}
+
+// 12. A day played clean is rated three stars on its own closing card.
+{
+  const { page } = await open('/?day=1&c=1')
+  await playUntil(page, () => !!document.querySelector('.dayStars'))
+  await new Promise((r) => setTimeout(r, 900))
+  const card = await page.evaluate(() => {
+    const el = document.querySelector('.dayStars')
+    if (!el) return null
+    return {
+      won: el.querySelectorAll('.dayStars__s.is-won').length,
+      slots: el.querySelectorAll('.dayStars__s').length,
+      caption: el.querySelector('em')?.textContent?.trim() ?? '',
+    }
+  })
+  const ok = card && card.slots === 3 && card.won === 3 && /% of a perfect day/.test(card.caption)
+  console.log(
+    `  ${ok ? '✓' : '✗'} ${'a clean day is three stars'.padEnd(42)} ` +
+      `${card ? `${card.won}/3, ${card.caption}` : 'no day rating'}`,
+  )
+  if (!ok) failures++
+  await page.close()
+}
+
+// 13. The best week survives a reload — it is the only thing that persists.
+{
+  const { page } = await open('/?day=1&c=1')
+  await page.evaluate(() => localStorage.clear())
+  await page.reload({ waitUntil: 'networkidle2' })
+  await page.waitForFunction(
+    () => document.querySelector('.axie-stage')?.dataset.stage === 'ready',
+    { timeout: 25_000 },
+  )
+  await playUntil(page, () => !!document.querySelector('.summary'), 200)
+  await new Promise((r) => setTimeout(r, 1200))
+  const first = await page.evaluate(() => ({
+    badge: !!document.querySelector('.summary__badge'),
+    total: Number(
+      (document.querySelector('.summary__totalNum')?.textContent ?? '').replace(/\D/g, ''),
+    ),
+    stored: Number(JSON.parse(localStorage.getItem('com-tam-please:best:v1') ?? '{}').score ?? 0),
+  }))
+
+  // A fresh page in the same browser: same origin, so the same stored best.
+  const { page: titlePage } = await open('/')
+  const shown = await titlePage.evaluate(() => {
+    const el = document.querySelector('.title__best')
+    if (!el) return null
+    return {
+      text: el.textContent?.replace(/\s+/g, ' ').trim() ?? '',
+      score: Number((el.querySelector('strong')?.textContent ?? '').replace(/\D/g, '')),
+    }
+  })
+
+  const ok =
+    first.badge &&
+    first.total > 0 &&
+    first.stored === first.total &&
+    shown &&
+    shown.score === first.total
+  console.log(
+    `  ${ok ? '✓' : '✗'} ${'best week persists to the title card'.padEnd(42)} ` +
+      `${first.total} stored, title shows ${shown ? shown.score : 'nothing'}` +
+      `${first.badge ? ', new-best badge shown' : ', NO badge'}`,
+  )
+  if (!ok) failures++
+  await titlePage.close()
+  await page.close()
+}
+
+// 14. A worse run afterwards must not overwrite it, and must say so.
+{
+  // One day out of five, so a much smaller score than the full week just banked.
+  const { page } = await open('/?day=5&c=1')
+  const before = await page.evaluate(
+    () => Number(JSON.parse(localStorage.getItem('com-tam-please:best:v1') ?? '{}').score ?? 0),
+  )
+  await playUntil(page, () => !!document.querySelector('.summary'))
+  await new Promise((r) => setTimeout(r, 1000))
+  const after = await page.evaluate(() => ({
+    stored: Number(JSON.parse(localStorage.getItem('com-tam-please:best:v1') ?? '{}').score ?? 0),
+    badge: !!document.querySelector('.summary__badge'),
+    line: document.querySelector('.summary__best')?.textContent?.trim() ?? '',
+    total: Number(
+      (document.querySelector('.summary__totalNum')?.textContent ?? '').replace(/\D/g, ''),
+    ),
+  }))
+  const beat = after.total > before
+  const ok = beat
+    ? after.badge && after.stored === after.total
+    : !after.badge && after.stored === before && /your best is still/i.test(after.line)
+  console.log(
+    `  ${ok ? '✓' : '✗'} ${'best week only moves when beaten'.padEnd(42)} ` +
+      `${before} → ran ${after.total}, stored ${after.stored}${after.badge ? ' (new best)' : ''}`,
   )
   if (!ok) failures++
   await page.close()

@@ -72,10 +72,19 @@ the score is what the week is actually played for, and it rewards two things mon
   free: it survives the early days on two strikes apiece and banks every catch. The score is what
   punishes it, not the strike counter.
 
-The run ends on a shareable star screen. **Three stars** are measured against the week you were
-actually dealt — `perfectScore()` replays it as a flawless, instant run, and that's the denominator
-for the stars, the percentage and the rank, so a lucky deal of expensive tickets can't buy a better
-result. Three stars at 70% of that ceiling, two at 45%, one at 20%.
+**Stars, per day and per week.** Each day closes with its own rating, measured against a flawless,
+instant run of *that* day from the streak you walked in with — so a long streak lifts the day's
+score and its ceiling by the same factor and cancels out, and Monday is as three-starrable as
+Friday. The run then ends on a star screen rating the whole week the same way. Three stars at 70%
+of the ceiling, two at 45%, one at 20%.
+
+The ceiling is computed rather than constant, because two dealt weeks aren't worth the same: a
+lucky deal of expensive tickets shouldn't buy a better rank.
+
+**Your best week persists** in `localStorage` — it's the only thing that does. It shows on the
+title card and on the end screen, which says whether you beat it. Storage is wrapped in try/catch
+throughout and the game plays identically when it returns nothing (a private window, cleared site
+data).
 
 `src/game/sim.ts` plays 40 dealt weeks four ways and asserts the spread holds: flawless play lands
 at 81% of the ceiling and always finishes, one mistake a day at 34% and still finishes, and neither
@@ -138,6 +147,7 @@ src/
   content/days.ts      The five-day plan and the dealer that builds a week from a seed
   content/pools.ts     Honest customers and fraud variants the dealer draws from
   lib/rng.ts           Seeded PRNG, so a run is random between plays and fixed within one
+  lib/bestRun.ts       The one persisted thing: your best week, guarded localStorage
   game/scoring.ts      Streaks, speed, the per-week ceiling, stars and ranks
   content/menu.ts      Dishes, prices and photos; ticket totals are computed from these
   components/          Queue + AlleyStage (the street overhead), Booth (hatch + counter),
@@ -239,6 +249,6 @@ the kit.
 - Desktop only, 1280×800, mouse required. The drags are pointer-based so touch would work, but the
   layout is not built for it.
 - PayMoji's display face (Neulis Neue) is commercial, so the wordmark is tight-tracked Inter.
-- No persistence; refreshing restarts the day, and no best score is kept between runs.
+- No persistence beyond the best week; refreshing mid-run restarts the day.
 - The dealer varies which fraud and which excuse turn up, but not the difficulty curve within a
   day — a day never front-loads its hardest call.

@@ -3,7 +3,14 @@ import { resolveCall, walkout } from './validate.ts'
 import { allDays, findDay, TOTAL_DAYS as DAY_COUNT } from '../content/days.ts'
 import { heroDish } from '../content/menu.ts'
 import type { Encounter } from './types.ts'
-import { award, perfectScore, STRIKE_LIMIT, type RunStats } from './scoring.ts'
+import {
+  award,
+  perfectDayScore,
+  perfectScore,
+  starsForDay,
+  STRIKE_LIMIT,
+  type RunStats,
+} from './scoring.ts'
 
 export type Phase = 'title' | 'morning' | 'serving' | 'feedback' | 'dayEnd' | 'gameOver' | 'finished'
 
@@ -17,8 +24,14 @@ export type State = {
   strikes: number
   /** Run total you're actually playing for, carried across days. */
   score: number
-  /** Run tallies as today opened, so replaying a day doesn't double-count it. */
-  dayStart: { score: number; correct: number; wrong: number; walkouts: number }
+  /**
+   * Run tallies as today opened, so replaying a day doesn't double-count it.
+   * `streak` is in here because a day's own ceiling depends on the streak you
+   * carried into it — see `perfectDayScore`.
+   */
+  dayStart: { score: number; correct: number; wrong: number; walkouts: number; streak: number }
+  /** Stars for each day banked so far, in order. A retried day is scored once. */
+  dayStars: number[]
   /** Consecutive correct calls. Drives the multiplier. */
   streak: number
   bestStreak: number
@@ -79,7 +92,8 @@ export const initialState: State = {
   earned: 0,
   strikes: 0,
   score: 0,
-  dayStart: { score: 0, correct: 0, wrong: 0, walkouts: 0 },
+  dayStart: { score: 0, correct: 0, wrong: 0, walkouts: 0, streak: 0 },
+  dayStars: [],
   streak: 0,
   bestStreak: 0,
   correct: 0,
@@ -122,6 +136,7 @@ export function reducer(state: State, action: Action): State {
           correct: state.correct,
           wrong: state.wrong,
           walkouts: state.walkouts,
+          streak: state.streak,
         },
         usedTxIds: [],
         fed: [],
@@ -201,12 +216,18 @@ export function reducer(state: State, action: Action): State {
 
     case 'advanceDay': {
       const cleared = state.daysCleared + 1
-      if (isLastDay(state.day)) return { ...state, daysCleared: cleared, phase: 'finished' }
+      // Banked here rather than at `dayEnd`, because a day you strike out of has
+      // to be replayed and only the attempt you walk away from counts.
+      const dayStars = [...state.dayStars, starsToday(state)]
+      if (isLastDay(state.day)) {
+        return { ...state, daysCleared: cleared, dayStars, phase: 'finished' }
+      }
       return {
         ...state,
         phase: 'morning',
         day: state.day + 1,
         daysCleared: cleared,
+        dayStars,
         index: 0,
         earned: 0,
         strikes: 0,
@@ -242,6 +263,16 @@ export function reducer(state: State, action: Action): State {
   }
 }
 
+/** What today's score is worth against a flawless, instant run of today. */
+export function dayCeiling(state: State): number {
+  const day = findDay(state.day)
+  return day ? perfectDayScore(day, state.dayStart.streak) : 0
+}
+
+export const scoredToday = (state: State) => state.score - state.dayStart.score
+
+export const starsToday = (state: State) => starsForDay(scoredToday(state), dayCeiling(state))
+
 /** Did the player clear rent for the day they just finished? Flavour now, not fate. */
 export function madeRent(state: State): boolean {
   const day = findDay(state.day)
@@ -254,6 +285,7 @@ export const survivedDay = (state: State) => !state.failedOut
 export const runStats = (state: State): RunStats => ({
   score: state.score,
   maxScore: perfectScore(allDays()),
+  dayStars: state.dayStars,
   dayReached: state.day,
   correct: state.correct,
   wrong: state.wrong,

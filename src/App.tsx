@@ -2,11 +2,14 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'r
 import { Button, Intent, Size } from '@axieinfinity/dango'
 import type { State } from './game/store.ts'
 import {
+  dayCeiling,
   initialState,
   isLastDay,
   madeRent,
   reducer,
   runStats,
+  scoredToday,
+  starsToday,
   TOTAL_DAYS,
 } from './game/store.ts'
 import { STRIKE_LIMIT } from './game/scoring.ts'
@@ -112,7 +115,9 @@ export default function App() {
       <Card
         kicker={`Day ${day.day}`}
         title={day.stickerDay ? 'The machine is dead' : 'Morning'}
-        track={<DayTrack day={state.day} cleared={state.daysCleared} />}
+        track={
+          <DayTrack day={state.day} cleared={state.daysCleared} stars={state.dayStars} />
+        }
         body={
           <>
             <p>{day.intro}</p>
@@ -347,7 +352,10 @@ function DayEnd({
   const survived = !state.failedOut
   const rentCleared = madeRent(state)
   const balance = state.earned - day.rent
-  const dayScore = state.score - state.dayStart.score
+  const dayScore = scoredToday(state)
+  const ceiling = dayCeiling(state)
+  const stars = survived ? starsToday(state) : 0
+  const share = ceiling > 0 ? Math.max(0, dayScore) / ceiling : 0
 
   return (
     <div className="card">
@@ -356,6 +364,7 @@ function DayEnd({
           day={state.day}
           cleared={survived ? state.day : state.daysCleared}
           failedDay={survived ? undefined : state.day}
+          stars={survived ? [...state.dayStars, stars] : state.dayStars}
         />
         <span className="card__kicker">Day {day.day} · closing up</span>
         <h1 className="card__title">
@@ -365,6 +374,16 @@ function DayEnd({
               ? "Rent's covered 💸"
               : 'Short on rent, but the stall stands'}
         </h1>
+
+        {/* Today, rated against a flawless run of today — see perfectDayScore. */}
+        <div className="dayStars" role="img" aria-label={`${stars} out of 3 stars for today`}>
+          {[1, 2, 3].map((k) => (
+            <span key={k} className={k <= stars ? 'dayStars__s is-won' : 'dayStars__s'}>
+              ★
+            </span>
+          ))}
+          <em>{Math.round(share * 100)}% of a perfect day</em>
+        </div>
 
         <dl className="ledger__rows">
           <div className="ledger__row">

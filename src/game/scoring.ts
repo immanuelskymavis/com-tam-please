@@ -108,6 +108,8 @@ export type RunStats = {
   score: number
   /** What a flawless, instant run of this exact week would have scored. */
   maxScore: number
+  /** Stars earned per day, in order, for the days that were actually banked. */
+  dayStars: number[]
   /** The day the run ended on — not derivable from daysCleared once a day is replayed. */
   dayReached: number
   correct: number
@@ -129,11 +131,27 @@ export function perfectScore(days: readonly DayDef[]): number {
   let streak = 0
   let total = 0
   for (const day of days) {
-    for (const e of day.encounters) {
-      const base = e.violation === null ? e.ticket.total : e.ticket.total * CATCH_SHARE
-      total += Math.round(base * streakMultiplier(streak) * speedFactor(1))
-      streak++
-    }
+    total += perfectDayScore(day, streak)
+    streak += day.encounters.length
+  }
+  return total
+}
+
+/**
+ * The ceiling for one day, played flawlessly and instantly from the streak you
+ * walked in with.
+ *
+ * Taking the incoming streak as given is what makes a day's stars about *this
+ * day*: a long streak lifts the day's score and its ceiling by the same factor,
+ * so it cancels, and Monday can be three-starred as easily as Friday.
+ */
+export function perfectDayScore(day: DayDef, streakBefore = 0): number {
+  let streak = Math.max(0, streakBefore)
+  let total = 0
+  for (const e of day.encounters) {
+    const base = e.violation === null ? e.ticket.total : e.ticket.total * CATCH_SHARE
+    total += Math.round(base * streakMultiplier(streak) * speedFactor(1))
+    streak++
   }
   return total
 }
@@ -148,13 +166,21 @@ export const shareOfMax = (stats: RunStats) =>
  */
 export const STAR_THRESHOLDS = [0.7, 0.45, 0.2] as const
 
-export const starsFor = (stats: RunStats): 0 | 1 | 2 | 3 => {
-  const share = shareOfMax(stats)
+export const starsForShare = (share: number): 0 | 1 | 2 | 3 => {
   if (share >= STAR_THRESHOLDS[0]) return 3
   if (share >= STAR_THRESHOLDS[1]) return 2
   if (share >= STAR_THRESHOLDS[2]) return 1
   return 0
 }
+
+export const starsFor = (stats: RunStats): 0 | 1 | 2 | 3 => starsForShare(shareOfMax(stats))
+
+/** Same thresholds for a day as for a week, so three stars means one thing. */
+export const starsForDay = (dayScore: number, dayCeiling: number) =>
+  starsForShare(dayCeiling > 0 ? Math.max(0, dayScore) / dayCeiling : 0)
+
+/** ★★☆ — used on the end card and in the shared block. */
+export const starBlock = (stars: number) => '★'.repeat(stars) + '☆'.repeat(3 - stars)
 
 /** Thresholds are shares of a perfect week, so they survive a re-dealt week. */
 const RANKS: { at: number; title: string; blurb: string }[] = [
@@ -179,6 +205,7 @@ export function shareText(stats: RunStats, totalDays: number, url: string): stri
     '⭐'.repeat(stars) + '·'.repeat(3 - stars),
     dong(stats.score) + `  (${Math.round(shareOfMax(stats) * 100)}% of perfect)`,
     '',
+    stats.dayStars.map(starBlock).join(' ') || '—',
     `✅ ${stats.correct}   ❌ ${stats.wrong}   🚶 ${stats.walkouts}`,
     `🔥 Best streak ${stats.bestStreak}`,
     `🍚 ${rank.title}`,

@@ -11,7 +11,7 @@ import type { Action, State } from './store.ts'
 import { initialState, madeRent, reducer, runStats } from './store.ts'
 import { findDay, rollRun, TOTAL_DAYS } from '../content/days.ts'
 import { findViolation } from './validate.ts'
-import { STRIKE_LIMIT, rankFor, shareOfMax, starsFor } from './scoring.ts'
+import { STRIKE_LIMIT, perfectDayScore, rankFor, shareOfMax, starsFor } from './scoring.ts'
 import { dong } from '../lib/format.ts'
 
 type Strategy = 'perfect' | 'serveAll' | 'refuseAll' | 'oneSlipADay' | 'slips'
@@ -181,6 +181,40 @@ for (const mode of ['serveAll', 'refuseAll'] as const) {
 
 if (Math.min(...starsSeen.fast) < 3) fail('quick flawless play should always be three stars')
 if (Math.max(...starsSeen.slow) > 2) fail('dithering through a flawless week should not be three stars')
+
+// ---------------------------------------------------------------------------
+// Per-day stars: a day is rated against a flawless run of *that* day.
+// ---------------------------------------------------------------------------
+{
+  const perDay: { flawless: number[][]; sloppy: number[][] } = { flawless: [], sloppy: [] }
+  for (let seed = 1; seed <= SEEDS; seed++) {
+    rollRun(seed)
+    perDay.flawless.push(play('perfect', 0.85).s.dayStars)
+    perDay.sloppy.push(play('oneSlipADay').s.dayStars)
+  }
+  const flat = (xs: number[][]) => xs.flat()
+  const worstFlawless = Math.min(...flat(perDay.flawless))
+  const bestSloppy = Math.max(...flat(perDay.sloppy))
+  console.log(
+    `  day stars: flawless days score ${worstFlawless}-${Math.max(...flat(perDay.flawless))}★, ` +
+      `days with a mistake ${Math.min(...flat(perDay.sloppy))}-${bestSloppy}★`,
+  )
+  if (worstFlawless < 3) fail('a day played flawlessly and quickly should be three stars')
+  if (bestSloppy > 2) fail('a day with a mistake in it should not be three stars')
+  if (perDay.flawless.some((week) => week.length !== TOTAL_DAYS)) {
+    fail('a finished week should bank a rating for every day')
+  }
+
+  // The incoming streak must cancel out, or Friday would be easier to
+  // three-star than Monday for reasons that have nothing to do with Friday.
+  rollRun(1)
+  const day3 = findDay(3)!
+  const cold = perfectDayScore(day3, 0)
+  const hot = perfectDayScore(day3, 30)
+  const ok = hot > cold
+  console.log(`  a day's ceiling rises with the streak you bring: ${cold} → ${hot} ${ok ? '✓' : '✗'}`)
+  if (!ok) failed = true
+}
 
 // ---------------------------------------------------------------------------
 // Mechanics that are easy to break and hard to notice.

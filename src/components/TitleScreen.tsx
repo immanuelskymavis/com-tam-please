@@ -1,11 +1,20 @@
+import { useState } from 'react'
 import { Button, Intent, Size } from '@axieinfinity/dango'
 import { AxieStage } from './AxieStage.tsx'
+import { allDays, TOTAL_DAYS } from '../content/days.ts'
+import { RULES } from '../game/types.ts'
+import { readBest } from '../lib/bestRun.ts'
+import { dong } from '../lib/format.ts'
 
 /**
  * The title card. A stall front at night: awning, string lights, a hand-painted
  * board, and one Axie already waiting at the counter for you to open up.
  */
 export function TitleScreen({ onStart }: { onStart: () => void }) {
+  // Read once: localStorage can throw, and nothing here should re-read it.
+  const [best] = useState(readBest)
+  const customers = allDays().reduce((n, d) => n + d.encounters.length, 0)
+
   return (
     <div className="title">
       <div className="title__street" />
@@ -31,15 +40,29 @@ export function TitleScreen({ onStart }: { onStart: () => void }) {
 
           <div className="title__meta">
             <span>
-              <b>10</b> days
+              <b>{TOTAL_DAYS}</b> days
             </span>
             <span>
-              <b>9</b> rules
+              <b>{RULES.length}</b> rules
             </span>
             <span>
-              <b>41</b> customers
+              <b>{customers}</b> customers
             </span>
           </div>
+
+          {best && (
+            <p className="title__best">
+              <span className="title__bestStars">
+                {[1, 2, 3].map((k) => (
+                  <b key={k} className={k <= best.stars ? 'is-won' : ''}>
+                    ★
+                  </b>
+                ))}
+              </span>
+              Best week <strong>{dong(best.score)}</strong>
+              {best.at && <i> · {best.at}</i>}
+            </p>
+          )}
 
           <div className="title__cta">
             <Button
