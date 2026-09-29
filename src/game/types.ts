@@ -2,13 +2,13 @@
 export type RuleId =
   | 'amount'      // day 1 — amount must equal the ticket total
   | 'expiry'      // day 2 — receipt must be live, not expired
-  | 'recipient'   // day 3 — must be paid to *your* account
-  | 'screenshot'  // day 4 — live receipt, not a frozen screenshot
-  | 'staticQr'    // day 5 — static-sticker days: customer typed the amount
-  | 'duplicate'   // day 6 — transaction id already used today
-  | 'rate'        // day 7 — conversion must match the posted rate
-  | 'bankMismatch'// day 8 — the bank name must match its BIN
-  | 'currency'    // day 9 — must settle in đồng
+  | 'recipient'   // day 2 — must be paid to *your* account
+  | 'screenshot'  // day 3 — live receipt, not a frozen screenshot
+  | 'staticQr'    // day 3 — static-sticker days: customer typed the amount
+  | 'duplicate'   // day 3 — transaction id already used today
+  | 'rate'        // day 4 — conversion must match the posted rate
+  | 'bankMismatch'// day 4 — the bank name must match its BIN
+  | 'currency'    // day 4 — must settle in đồng
 
 export type Rule = {
   id: RuleId
@@ -34,43 +34,43 @@ export const RULES: Rule[] = [
   },
   {
     id: 'recipient',
-    day: 3,
+    day: 2,
     label: 'Paid to Cô Ba, account 1017286654',
     hint: 'Tourists sometimes scan the phở place two doors down',
   },
   {
     id: 'screenshot',
-    day: 4,
+    day: 3,
     label: 'Live receipt, not a screenshot',
     hint: 'A live receipt counts down. A screenshot is frozen',
   },
   {
     id: 'staticQr',
-    day: 5,
+    day: 3,
     label: 'Sticker days: check the typed amount',
     hint: 'A printed QR carries no amount, so they type it themselves',
   },
   {
     id: 'duplicate',
-    day: 6,
+    day: 3,
     label: 'Transaction ID must be new',
     hint: 'Check it against the log — one receipt, one plate',
   },
   {
     id: 'rate',
-    day: 7,
+    day: 4,
     label: 'Rate must match the board',
     hint: 'Do the maths: dollars × posted rate should equal the đồng',
   },
   {
     id: 'bankMismatch',
-    day: 8,
+    day: 4,
     label: 'Bank name must match its code',
     hint: '970436 is Vietcombank. Check the code against the name',
   },
   {
     id: 'currency',
-    day: 9,
+    day: 4,
     label: 'Must settle in đồng',
     hint: 'A receipt settled in another currency never reached your account',
   },
@@ -78,8 +78,11 @@ export const RULES: Rule[] = [
 
 export const rulesForDay = (day: number) => RULES.filter((r) => r.day <= day)
 
+/** Everything this morning's card has to teach. Days 2-4 unlock two or three at once. */
+export const newRulesForDay = (day: number) => RULES.filter((r) => r.day === day)
+
 /** Seconds one customer will wait before giving up. Tightens as the days get harder. */
-export const patienceForDay = (day: number) => Math.max(18, 40 - day * 2)
+export const patienceForDay = (day: number) => Math.max(22, 42 - (day - 1) * 4)
 
 /**
  * Seconds in a whole shift. Generous enough to inspect every receipt properly,

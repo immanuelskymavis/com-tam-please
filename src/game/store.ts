@@ -1,9 +1,9 @@
 import type { CallOutcome } from './validate.ts'
 import { resolveCall, walkout } from './validate.ts'
-import { DAYS, findDay } from '../content/days.ts'
+import { allDays, findDay, TOTAL_DAYS as DAY_COUNT } from '../content/days.ts'
 import { heroDish } from '../content/menu.ts'
 import type { Encounter } from './types.ts'
-import { award, STRIKE_LIMIT, type RunStats } from './scoring.ts'
+import { award, perfectScore, STRIKE_LIMIT, type RunStats } from './scoring.ts'
 
 export type Phase = 'title' | 'morning' | 'serving' | 'feedback' | 'dayEnd' | 'gameOver' | 'finished'
 
@@ -42,8 +42,9 @@ export type State = {
 
 /**
  * Demo jumps, read from the query string:
- *   ?day=5     open on day 5 (the sticker day — the rule worth showing)
- *   ?day=5&c=2 open on day 5 and go straight to its 2nd customer, skipping the cards
+ *   ?day=3     open on day 3 (the sticker day — the rules worth showing)
+ *   ?day=3&c=2 open on day 3 and go straight to its 2nd customer, skipping the cards
+ *   ?seed=42   deal the same week every time
  * Nobody demoing wants to play four days to reach the interesting rule.
  */
 function params(): URLSearchParams {
@@ -53,7 +54,7 @@ function params(): URLSearchParams {
 function startingDay(): number {
   const asked = Number(params().get('day'))
   if (!Number.isInteger(asked)) return 1
-  return DAYS.some((d) => d.day === asked) ? asked : 1
+  return allDays().some((d) => d.day === asked) ? asked : 1
 }
 
 /** 1-based customer in the query string; 0-based index internally. null = start of day. */
@@ -61,7 +62,7 @@ function startingIndex(day: number): number | null {
   const raw = params().get('c')
   if (raw === null) return null
   const asked = Number(raw)
-  const found = DAYS.find((d) => d.day === day)
+  const found = allDays().find((d) => d.day === day)
   if (!found || !Number.isInteger(asked)) return null
   return asked >= 1 && asked <= found.encounters.length ? asked - 1 : null
 }
@@ -252,6 +253,7 @@ export const survivedDay = (state: State) => !state.failedOut
 
 export const runStats = (state: State): RunStats => ({
   score: state.score,
+  maxScore: perfectScore(allDays()),
   dayReached: state.day,
   correct: state.correct,
   wrong: state.wrong,
@@ -260,6 +262,6 @@ export const runStats = (state: State): RunStats => ({
   daysCleared: state.daysCleared,
 })
 
-export const TOTAL_DAYS = DAYS.length
+export const TOTAL_DAYS = DAY_COUNT
 
-export const isLastDay = (day: number) => day >= DAYS[DAYS.length - 1].day
+export const isLastDay = (day: number) => day >= DAY_COUNT

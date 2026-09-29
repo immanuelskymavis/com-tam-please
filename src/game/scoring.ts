@@ -1,4 +1,5 @@
 import type { CallOutcome } from './validate.ts'
+import type { DayDef } from './types.ts'
 
 /**
  * What a call is worth.
@@ -21,10 +22,10 @@ export const CATCH_SHARE = 0.5
 export const STRIKE_LIMIT = 3
 /**
  * What turning away an honest customer costs, as a share of their ticket.
- * Without this, refusing everything is free: a day holds 4 customers of whom 2 are
- * frauds, so blind refusal takes exactly 2 strikes and never hits the limit. The
- * strike allowance is meant to forgive slips, not to make indiscriminate refusal
- * a viable strategy — so the score, not the strike counter, is what punishes it.
+ * Without it, blind refusal is close to free: it survives the early days on two
+ * strikes apiece and banks every catch. The strike allowance exists to forgive
+ * slips, not to make indiscriminate refusal viable, so the score does the work
+ * the strike counter deliberately doesn't. See src/game/sim.ts.
  */
 export const WRONG_REFUSAL_PENALTY = 0.5
 
@@ -105,6 +106,8 @@ export function award(
 
 export type RunStats = {
   score: number
+  /** What a flawless, instant run of this exact week would have scored. */
+  maxScore: number
   /** The day the run ended on — not derivable from daysCleared once a day is replayed. */
   dayReached: number
   correct: number
@@ -115,28 +118,66 @@ export type RunStats = {
 }
 
 /**
- * Thresholds sit against a measured range: a flawless week scores about 7.0M at
- * middling speed, one mistake a day lands near 1.8M, and button-mashing tops out
- * around 0.3M. See src/game/sim.ts.
+ * The ceiling for a given week: every call right, every call instant.
+ *
+ * It has to be computed rather than constant, because the week is dealt fresh
+ * each run and two weeks are not worth the same. Everything the player sees
+ * afterwards — rank, stars, the percentage — is measured against this, so a
+ * lucky deal of expensive tickets can't inflate a result.
  */
+export function perfectScore(days: readonly DayDef[]): number {
+  let streak = 0
+  let total = 0
+  for (const day of days) {
+    for (const e of day.encounters) {
+      const base = e.violation === null ? e.ticket.total : e.ticket.total * CATCH_SHARE
+      total += Math.round(base * streakMultiplier(streak) * speedFactor(1))
+      streak++
+    }
+  }
+  return total
+}
+
+export const shareOfMax = (stats: RunStats) =>
+  stats.maxScore > 0 ? Math.max(0, stats.score) / stats.maxScore : 0
+
+/**
+ * Stars are the headline and the rank is the flavour, so they read off one number:
+ * how close you came to the ceiling. Three stars needs accuracy *and* speed — a
+ * flawless but dawdling run tops out around 74% of the ceiling, which is two.
+ */
+export const STAR_THRESHOLDS = [0.7, 0.45, 0.2] as const
+
+export const starsFor = (stats: RunStats): 0 | 1 | 2 | 3 => {
+  const share = shareOfMax(stats)
+  if (share >= STAR_THRESHOLDS[0]) return 3
+  if (share >= STAR_THRESHOLDS[1]) return 2
+  if (share >= STAR_THRESHOLDS[2]) return 1
+  return 0
+}
+
+/** Thresholds are shares of a perfect week, so they survive a re-dealt week. */
 const RANKS: { at: number; title: string; blurb: string }[] = [
-  { at: 6_500_000, title: 'Cô Ba herself', blurb: 'Grandma has nothing left to teach you' },
-  { at: 4_500_000, title: 'Runs the block', blurb: 'The phở place has started copying you' },
-  { at: 3_000_000, title: 'Knows the codes', blurb: 'You read a BIN faster than the board' },
-  { at: 1_800_000, title: 'Holding the stall', blurb: 'Rent paid, most days' },
-  { at: 800_000, title: 'Still learning', blurb: 'A few plates went out for free' },
-  { at: 0, title: 'Rough week', blurb: 'Grandma is not angry, just disappointed' },
+  { at: 0.85, title: 'Cô Ba herself', blurb: 'Grandma has nothing left to teach you' },
+  { at: 0.7, title: 'Runs the block', blurb: 'The phở place has started copying you' },
+  { at: 0.55, title: 'Knows the codes', blurb: 'You read a BIN faster than the board' },
+  { at: 0.35, title: 'Holding the stall', blurb: 'Rent paid, most days' },
+  { at: 0.15, title: 'Still learning', blurb: 'A few plates went out for free' },
+  { at: -Infinity, title: 'Rough week', blurb: 'Grandma is not angry, just disappointed' },
 ]
 
-export const rankFor = (score: number) => RANKS.find((r) => score >= r.at) ?? RANKS[RANKS.length - 1]
+export const rankFor = (stats: RunStats) =>
+  RANKS.find((r) => shareOfMax(stats) >= r.at) ?? RANKS[RANKS.length - 1]
 
 /** Wordle-style block — short enough to paste anywhere. */
 export function shareText(stats: RunStats, totalDays: number, url: string): string {
-  const rank = rankFor(stats.score)
+  const rank = rankFor(stats)
+  const stars = starsFor(stats)
   const dong = (n: number) => `${Math.round(n).toLocaleString('en-US')} ₫`
   return [
     `Cơm Tấm, Please — ${stats.daysCleared}/${totalDays} days`,
-    dong(stats.score),
+    '⭐'.repeat(stars) + '·'.repeat(3 - stars),
+    dong(stats.score) + `  (${Math.round(shareOfMax(stats) * 100)}% of perfect)`,
     '',
     `✅ ${stats.correct}   ❌ ${stats.wrong}   🚶 ${stats.walkouts}`,
     `🔥 Best streak ${stats.bestStreak}`,

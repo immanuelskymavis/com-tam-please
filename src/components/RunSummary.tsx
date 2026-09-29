@@ -1,6 +1,13 @@
 import { useState } from 'react'
 import { Button, Intent, Size } from '@axieinfinity/dango'
-import { rankFor, shareText, type RunStats } from '../game/scoring.ts'
+import {
+  rankFor,
+  shareOfMax,
+  shareText,
+  STAR_THRESHOLDS,
+  starsFor,
+  type RunStats,
+} from '../game/scoring.ts'
 
 /**
  * End of the run. The number is the point of the screen, so it gets the room —
@@ -16,7 +23,9 @@ export function RunSummary({
   onReplay: () => void
 }) {
   const [copied, setCopied] = useState(false)
-  const rank = rankFor(stats.score)
+  const rank = rankFor(stats)
+  const stars = starsFor(stats)
+  const pctOfMax = shareOfMax(stats)
   const url = typeof window === 'undefined' ? '' : window.location.origin + window.location.pathname
   const accuracy =
     stats.correct + stats.wrong > 0
@@ -51,6 +60,8 @@ export function RunSummary({
             : `Closed on day ${stats.dayReached}`}
         </span>
 
+        <Stars earned={stars} />
+
         <div className="summary__total">
           <span className="summary__totalNum">{stats.score.toLocaleString('en-US')}</span>
           <span className="summary__dong">₫</span>
@@ -59,6 +70,19 @@ export function RunSummary({
           <b>{rank.title}</b>
           <span>{rank.blurb}</span>
         </p>
+
+        {/* The bar is what the stars are actually measured against, so show it. */}
+        <div className="summary__meter" role="img" aria-label={`${Math.round(pctOfMax * 100)}% of a perfect week`}>
+          <div className="summary__meterTrack">
+            <i style={{ width: `${Math.min(100, pctOfMax * 100)}%` }} />
+            {STAR_THRESHOLDS.map((t) => (
+              <u key={t} style={{ left: `${t * 100}%` }} />
+            ))}
+          </div>
+          <span className="summary__meterCap">
+            {Math.round(pctOfMax * 100)}% of a perfect week ({stats.maxScore.toLocaleString('en-US')} ₫)
+          </span>
+        </div>
 
         <dl className="summary__grid">
           <div>
@@ -102,6 +126,26 @@ export function RunSummary({
 
         <textarea id="share-fallback" className="summary__fallback" readOnly hidden rows={8} />
       </div>
+    </div>
+  )
+}
+
+/**
+ * Three stars, filled by how close the run came to its own ceiling. They land
+ * one at a time — the point of a star screen is the beat between each one.
+ */
+function Stars({ earned }: { earned: number }) {
+  return (
+    <div className="stars" role="img" aria-label={`${earned} out of 3 stars`}>
+      {[1, 2, 3].map((i) => (
+        <span
+          key={i}
+          className={`stars__s ${i <= earned ? 'is-won' : ''}`}
+          style={{ animationDelay: `${120 + i * 260}ms` }}
+        >
+          ★
+        </span>
+      ))}
     </div>
   )
 }

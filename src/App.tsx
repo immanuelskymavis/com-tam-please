@@ -12,8 +12,9 @@ import {
 import { STRIKE_LIMIT } from './game/scoring.ts'
 import { Takings } from './components/Takings.tsx'
 import { RunSummary } from './components/RunSummary.tsx'
-import { patienceForDay, RULES, rulesForDay, shiftForDay } from './game/types.ts'
-import { findDay } from './content/days.ts'
+import { DayTrack } from './components/DayTrack.tsx'
+import { newRulesForDay, patienceForDay, RULES, rulesForDay, shiftForDay } from './game/types.ts'
+import { findDay, rollRun } from './content/days.ts'
 import { heroDish, lineLabel } from './content/menu.ts'
 import type { Mood } from './components/Booth.tsx'
 import { Booth } from './components/Booth.tsx'
@@ -34,7 +35,9 @@ export default function App() {
   const day = findDay(state.day)
   const encounter = day?.encounters[state.index]
   const rules = useMemo(() => rulesForDay(state.day), [state.day])
-  const newestRule = RULES.find((r) => r.day === state.day)?.id
+  // Days 2-4 unlock two or three rules at once, so this is a list, not one id.
+  const newRules = useMemo(() => newRulesForDay(state.day), [state.day])
+  const newRuleIds = useMemo(() => newRules.map((r) => r.id), [newRules])
   const serving = state.phase === 'serving'
 
   // ---- drag: plate to the hatch serves, stamp to the phone refuses ----
@@ -109,6 +112,7 @@ export default function App() {
       <Card
         kicker={`Day ${day.day}`}
         title={day.stickerDay ? 'The machine is dead' : 'Morning'}
+        track={<DayTrack day={state.day} cleared={state.daysCleared} />}
         body={
           <>
             <p>{day.intro}</p>
@@ -116,10 +120,24 @@ export default function App() {
               Rent tonight: <strong>{dong(day.rent)}</strong> · Board rate today:{' '}
               <strong className="mono">{day.postedRate.toLocaleString('en-US')} ₫/$</strong>
             </p>
-            {newestRule && (
-              <p className="new-rule">
-                New rule — {RULES.find((r) => r.id === newestRule)?.label}
-              </p>
+            {newRules.length > 0 && (
+              <>
+                {newRules.length > 1 && (
+                  <p className="new-rules__head">
+                    {newRules.length} new rules today
+                  </p>
+                )}
+                <ul className="new-rules">
+                  {newRules.map((r) => (
+                    <li key={r.id} className="new-rule">
+                      {newRules.length === 1 ? `New rule — ${r.label}` : r.label}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+            {newRules.length === 0 && (
+              <p className="new-rule">No new rules. Everything you already know, all at once</p>
             )}
           </>
         }
@@ -142,7 +160,11 @@ export default function App() {
       <RunSummary
         stats={runStats(state)}
         totalDays={TOTAL_DAYS}
-        onReplay={() => dispatch({ type: 'restart' })}
+        onReplay={() => {
+          // A new run is a new week — deal fresh days before the reducer resets.
+          rollRun()
+          dispatch({ type: 'restart' })
+        }}
       />
     )
   }
@@ -178,10 +200,7 @@ export default function App() {
 
         <aside className="pp__board">
           <Takings score={state.score} streak={state.streak} />
-          <div className="board__row">
-            <span className="board__k">DAY</span>
-            <span className="board__v">{String(day.day).padStart(2, '0')}</span>
-          </div>
+          <DayTrack day={state.day} cleared={state.daysCleared} compact />
           <div className="board__row">
             <span className="board__k">TAKEN</span>
             <span className={`board__v ${state.earned >= day.rent ? 'is-clear' : ''}`}>
@@ -218,7 +237,7 @@ export default function App() {
         total={encounter.ticket.total}
         isStaticQr={Boolean(day.stickerDay)}
         rules={rules}
-        newestRuleId={newestRule}
+        newRuleIds={newRuleIds}
         log={state.usedTxIds}
         dish={dish}
         plateHeld={drag?.id === 'plate'}
@@ -333,6 +352,11 @@ function DayEnd({
   return (
     <div className="card">
       <div className="card__inner ledger">
+        <DayTrack
+          day={state.day}
+          cleared={survived ? state.day : state.daysCleared}
+          failedDay={survived ? undefined : state.day}
+        />
         <span className="card__kicker">Day {day.day} · closing up</span>
         <h1 className="card__title">
           {!survived
@@ -402,15 +426,18 @@ function Card({
   title,
   body,
   action,
+  track,
 }: {
   kicker: string
   title: string
   body: React.ReactNode
   action: React.ReactNode
+  track?: React.ReactNode
 }) {
   return (
     <div className="card">
       <div className="card__inner">
+        {track}
         <span className="card__kicker">{kicker}</span>
         <h1 className="card__title">{title}</h1>
         <div className="card__body">{body}</div>

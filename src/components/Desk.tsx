@@ -22,7 +22,7 @@ export function Desk({
   total,
   isStaticQr,
   rules,
-  newestRuleId,
+  newRuleIds,
   log,
   dish,
   plateHeld,
@@ -40,7 +40,7 @@ export function Desk({
   total: number
   isStaticQr: boolean
   rules: Rule[]
-  newestRuleId?: string
+  newRuleIds?: string[]
   log: string[]
   dish: MenuItem
   plateHeld: boolean
@@ -67,7 +67,7 @@ export function Desk({
             <h4>Cô Ba — house rules</h4>
             <ol>
               {rules.map((r) => (
-                <li key={r.id} className={r.id === newestRuleId ? 'is-new' : ''}>
+                <li key={r.id} className={newRuleIds?.includes(r.id) ? 'is-new' : ''}>
                   <strong>{r.label}</strong>
                   <span>{r.hint}</span>
                 </li>

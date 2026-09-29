@@ -409,7 +409,7 @@ the desk surface shows beneath them; that strip is where the clutter lives.
 drag it through the hatch; pick up the DENIED stamp and drop it on their phone. Dropping either
 anywhere else does nothing, which is tested.
 
-**Patience.** 40 seconds on day 1, down to 20 by day 10. They idle calmly, then fidget through the
+**Patience.** 42 seconds on day 1, down to 26 by the last day. They idle calmly, then fidget through the
 `random-0X` clips, then openly sulk on `get-buff`/`get-debuff`, then walk. A walkout costs the sale
 but carries no strike — they didn't do anything wrong, and neither did you.
 
@@ -449,7 +449,7 @@ everyone already served sits on a red stool to the right, eating. These are the 
 skeletons at roughly a third scale, all in **one shared Pixi canvas** — several instances over
 cached skeleton data, rather than a canvas each.
 
-**Two clocks, not one.** Per-customer patience still drains (40s on day 1, 20s by day 10), and a
+**Two clocks, not one.** Per-customer patience still drains (42s on day 1, 26s on the last), and a
 whole-shift countdown now sits on the wall board, turning red under 15 seconds. When it expires the
 day closes wherever you are.
 
@@ -648,3 +648,87 @@ Measured spread, which the rank thresholds are set against:
   `?day=10` jump. It uses the actual day now.
 - The drag handler reads patience from a ref rather than the closure, which would otherwise have
   paid the speed bonus from a stale value.
+
+
+---
+
+## 20. Five dealt days, three stars
+
+The week was ten hand-written days that played out identically every time, and the fail condition
+had just moved off rent. Both of those turned out to be the same problem: a run you can memorise is
+a run nobody replays, and the new scoring only means something if there's a reason to go again.
+
+**The week is five days now.** Ten was a long sit for a demo, and the rule ladder was padded — one
+new thing a day for nine days. Compressed, it's a tutorial and three real lessons:
+
+| Day | Teaches | Shape |
+|---|---|---|
+| 1 | amount | 4 customers, 2 frauds — hand-written, identical every run |
+| 2 | expiry, recipient | 5 customers, 3 frauds |
+| 3 | screenshot, static-QR, duplicate | 6 customers, 3 frauds · the sticker day |
+| 4 | rate, bank/BIN, currency | 6 customers, 3 frauds |
+| 5 | — | 7 customers, 4 frauds · everything at once, sticker day, and the regular who is nine thousand short |
+
+**Days 2-5 are dealt, not written.** `src/content/pools.ts` holds sixteen honest customers and
+three or four variants of every fraud, each with its own excuse and its own way of breaking exactly
+one receipt field. `buildDay` draws from them against `hash(runSeed, day)`, guarantees one fraud per
+newly-taught rule, fills the rest with revision drawn from what's already unlocked, shuffles, and
+then points any duplicate at a transaction id somebody earlier in the day actually used. Prices,
+excuses, order, the axie at the window and the day's board rate all move; the lesson doesn't.
+
+Keying on `hash(seed, day)` rather than one rolling stream is what makes a *retry* deal the same
+day back. `?seed=42` pins a whole week, which is how the audit, the sim and both browser harnesses
+get reproducible content.
+
+**Rent is derived, not authored.** 70% of what the day's honest customers are worth, rounded to the
+nearest 5,000. A dealt day can't be accidentally unwinnable, and nobody has to re-tune nine numbers
+by hand when a pool changes.
+
+**Three stars, measured against the week you were actually dealt.** `perfectScore()` replays the
+dealt week as a flawless, instant run and that number is the denominator for the stars, the rank
+and the percentage on the end card. It has to be computed rather than constant: two dealt weeks
+aren't worth the same, and a lucky deal of expensive tickets shouldn't buy a better rank. Three
+stars at 70% of the ceiling, two at 45%, one at 20%.
+
+**A stage timeline** on every morning card, every closing card and the counter board — five nodes on
+a rail, done / here / to come, with how much week is left underneath.
+
+### What the sim had to answer
+The star thresholds are a promise the end screen makes, so the sim measures what play actually earns
+rather than assuming. Over 40 dealt weeks:
+
+| | Result | Share of that week's ceiling |
+|---|---|---|
+| Never wrong | finishes every time | 81% · ★★★ |
+| One mistake every day | finishes every time | 34% · ★ |
+| Serves everyone | struck out on day 2 | 0% |
+| Refuses everyone | struck out on day 3 | 3% |
+
+And the curve between them, which is the part worth checking — stars by mistakes made in the week:
+**0–1 → ★★★ · 2–3 → ★★ · 4–5 → ★**. The sim asserts the curve never goes up, that a mistake a day
+is still worth a star, and that dithering through a flawless week gets two rather than three, so
+speed keeps mattering.
+
+Note what changed for the brute-force strategies: with three honest customers on most days, blind
+refusal now **strikes out on day 3** rather than limping to the end. That's a side effect of the
+day shapes, not a new penalty — the wrong-refusal cost from the last pass is still what keeps the
+score down, and the sim still asserts the score gap rather than the death.
+
+### Bugs this pass surfaced
+1. **The shift clock and the strike dots were painted under the desk.** `.pp` is a three-row grid;
+   `.pp__mid` has no `overflow`, the board column overflowed its row by ~90px, and the desk — later
+   in the DOM — simply covered the spill. Every element measured "visible" and had a sane
+   bounding box. The timeline made it worse and is what exposed it. The board is tightened to fit,
+   and `shots.mjs` now fails when the board's last child crosses the top of the desk. Same class of
+   bug as the speech bubble under the wall and the drop labels under the cursor: **the DOM says
+   fine, nobody can see it.**
+2. **Both browser harnesses had scene coordinates baked in** — "day 7, customer 2 is the rate
+   fraud". With a dealt week those are meaningless. They now share `scripts/bot.mjs`, a reference
+   player that reads the POS, the phone, the board and the log spike and applies all nine rules, so
+   a test can play a real week without knowing what was dealt. The screenshot run plays the whole
+   five days through to the star screen.
+3. **The screenshot harness's old player only knew four of the nine rules.** Pointed at day 4 it
+   struck out, hit "Open up again", struck out again, and looped until it ran out of steps — which
+   is exactly what a dealt week does to a heuristic that was only ever right by coincidence.
+4. **The morning card only showed the first new rule** (`RULES.find(r => r.day === day)`), which was
+   correct when a day taught one thing and silently dropped two of three once it didn't.

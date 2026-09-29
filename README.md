@@ -15,8 +15,9 @@ npm run dev
 
 Then open http://localhost:5177.
 
-**Demo jumps.** `?day=8` opens on a given day; `?day=8&c=2` goes straight to that day's 2nd customer,
-skipping the cards. Day 5 customer 2 (the missing zero) is the single best thing to show.
+**Demo jumps.** `?day=3` opens on a given day; `?day=3&c=2` goes straight to that day's 2nd customer,
+skipping the cards. `?seed=1` pins the week, so a jump lands on the same customer every time — with
+`seed=1`, day 3 customer 6 (the missing zero on a printed sticker) is the single best thing to show.
 
 ## How you play
 
@@ -34,11 +35,29 @@ Below that, the customer stands behind the counter and your side of it is a work
   and carry the same grab affordance — neither is the default.
 - **The drop zones tell you where to let go.** Picking a tool up arms its target with a dashed
   outline; moving over it lights up solid and the label changes to "Let go".
-- **Two clocks.** Each customer has patience (40s on day 1, 20s by day 10): they fidget, then sulk,
+- **Two clocks.** Each customer has patience (42s on day 1, 26s by day 5): they fidget, then sulk,
   then leave. And the whole shift is timed — when it runs out you close up wherever you are.
 - **The street is the scoreboard.** Every plate you hand over walks out and sits down with it.
 - **The rulebook** lies on the desk. Open it mid-customer; every rule you've been taught is in it,
   along with today's board rate.
+
+## The week
+
+Five days. Day 1 is written by hand and identical every run; **days 2-5 are dealt** from a pool of
+honest customers and fraud variants against a per-run seed, so the same rules come back but never
+in the same order, at the same prices, or with the same excuses. Rent is derived from what the
+day's honest customers are worth, so a dealt day can't come out unwinnable.
+
+| Day | New rules | Customers |
+|---|---|---|
+| 1 | amount matches the ticket | 4 |
+| 2 | receipt still live · paid to your account | 5 |
+| 3 | live not a screenshot · typed sticker amount · transaction id unused | 6 |
+| 4 | board rate · bank name vs its BIN · settled in đồng | 6 |
+| 5 | the final exam — all nine, plus one person you'd rather not apply them to | 7 |
+
+A stage timeline on the morning card, the closing card and the counter board shows which day you're
+on and how much week is left.
 
 ## Scoring
 
@@ -49,13 +68,20 @@ the score is what the week is actually played for, and it rewards two things mon
 - **Speed.** Calling while the customer is still calm pays up to 60% more than dithering until
   they're fed up.
 - **Catching a fraud pays.** A correct refusal is worth half the ticket you just avoided losing —
-  and a *wrong* refusal costs you half of one. Without that penalty, refusing everything is free:
-  a day holds 4 customers of whom 2 are frauds, so blind refusal only ever takes 2 strikes and
-  never hits the limit. The score is what punishes it, not the strike counter.
+  and a *wrong* refusal costs you half of one. Without that penalty, refusing everything is close to
+  free: it survives the early days on two strikes apiece and banks every catch. The score is what
+  punishes it, not the strike counter.
 
-The run ends on a shareable summary — total đồng, accuracy, best streak, and a rank. `src/game/sim.ts`
-plays the week four ways and asserts the spread holds: a flawless week scores ~7.0M, one mistake a
-day ~1.8M, and button-mashing lands under 6% of a perfect run.
+The run ends on a shareable star screen. **Three stars** are measured against the week you were
+actually dealt — `perfectScore()` replays it as a flawless, instant run, and that's the denominator
+for the stars, the percentage and the rank, so a lucky deal of expensive tickets can't buy a better
+result. Three stars at 70% of that ceiling, two at 45%, one at 20%.
+
+`src/game/sim.ts` plays 40 dealt weeks four ways and asserts the spread holds: flawless play lands
+at 81% of the ceiling and always finishes, one mistake a day at 34% and still finishes, and neither
+brute-force strategy gets past day 3 or above 3%. It also checks the curve in between — stars by
+mistakes made in the week: **0–1 → ★★★, 2–3 → ★★, 4–5 → ★** — and that dithering through a flawless
+week earns two stars rather than three, so speed keeps mattering.
 
 ## What's built
 
@@ -109,12 +135,16 @@ src/
   game/validate.ts     The pure validator — one function, no UI
   game/store.ts        useReducer state machine
   game/audit.ts        Content check: authored violations vs computed, plus rent balance
-  content/days.ts      All 30 encounters
+  content/days.ts      The five-day plan and the dealer that builds a week from a seed
+  content/pools.ts     Honest customers and fraud variants the dealer draws from
+  lib/rng.ts           Seeded PRNG, so a run is random between plays and fixed within one
+  game/scoring.ts      Streaks, speed, the per-week ceiling, stars and ranks
   content/menu.ts      Dishes, prices and photos; ticket totals are computed from these
   components/          Queue + AlleyStage (the street overhead), Booth (hatch + counter),
                        Desk (everything you touch), AxieStage (Spine), Receipt, QrSticker
   hooks/useDrag.ts     Pointer drag for the plate and the stamp
   game/sim.ts          Headless playthrough that asserts the difficulty curve
+scripts/bot.mjs        Reference player both harnesses share — reads the counter, applies all 9 rules
 scripts/shots.mjs      Screenshot harness (drives real Chrome, waits for Spine)
 scripts/interaction.mjs  Drives the real drags and asserts what they do
 public/axies/          8 starter Axies, Spine 3.8.79 (skeleton.json + .atlas + .png)
@@ -130,23 +160,27 @@ the validator computes the *truth*. `audit.ts` runs both and shouts if they disa
 
 ```bash
 npx tsc --noEmit
-npx esbuild src/game/audit.ts --bundle --format=esm | node --input-type=module   # content
-npx esbuild src/game/sim.ts   --bundle --format=esm | node --input-type=module   # difficulty
-node scripts/shots.mjs                                                            # visuals
-node scripts/interaction.mjs                                                      # the drags
+npm run audit        # content, across 200 dealt weeks
+npm run sim          # difficulty and the star curve, across 40 dealt weeks
+npm run shots        # visuals — plays a whole week through to the star screen
+npm run interaction  # the drags
 ```
 
-The **audit** verifies every authored violation matches the validator, that no encounter violates a
-rule the player hasn't been taught yet, and that each day's rent sits at a beatable share of a
-perfect run.
+The **audit** deals 200 weeks and verifies every dealt violation matches the validator, that no
+encounter violates a rule the player hasn't been taught, that every rule a morning promises
+actually turns up that day, that no day is left without an honest customer, and that rent stays a
+beatable share. It also checks that the perfect-week ceiling doesn't swing wildly between deals,
+since that's the number people paste at each other.
 
-The **sim** plays the game three ways and asserts the curve: a perfect player finishes all 5 days, a
-player who serves everyone ends day 1 at −95,000 ₫, and one who refuses everyone takes nothing and
-collects strikes. Neither brute-force strategy works — you have to actually read the receipt.
+The **sim** plays 40 dealt weeks four ways and asserts the curve holds on all of them: a perfect
+player always finishes, a player who slips once a day always survives, and neither brute-force
+strategy gets past day 3 or above 3% of the ceiling. It also pins the star thresholds to measured
+play rather than to a guess.
 
 The **interaction** suite drives the real pointer: drag the plate to the hatch and expect a sale,
 drop the stamp on the phone and expect a refusal, drop the plate somewhere meaningless and expect
-nothing at all, and wait out a customer's patience to confirm they actually leave.
+nothing at all, wait out a customer's patience to confirm they actually leave, and play a day to
+the end to check the stars on the summary agree with the percentage beside them.
 
 The **shots** harness drives the real Chrome on this machine, waits for each Spine skeleton to report
 `ready`, plays a full day by dragging, and writes `shots/*.png`. Note that Chrome's
@@ -205,5 +239,6 @@ the kit.
 - Desktop only, 1280×800, mouse required. The drags are pointer-based so touch would work, but the
   layout is not built for it.
 - PayMoji's display face (Neulis Neue) is commercial, so the wordmark is tight-tracked Inter.
-- No persistence; refreshing restarts the day.
-- Day 8's moral-dilemma finale isn't written.
+- No persistence; refreshing restarts the day, and no best score is kept between runs.
+- The dealer varies which fraud and which excuse turn up, but not the difficulty curve within a
+  day — a day never front-loads its hardest call.

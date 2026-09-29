@@ -10,29 +10,46 @@
  */
 import puppeteer from 'puppeteer-core'
 import { mkdir } from 'node:fs/promises'
+import { decide } from './bot.mjs'
 
 const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
 const BASE = process.env.BASE ?? 'http://localhost:5177'
 const OUT = 'shots'
 
+/**
+ * Days 2-5 are dealt at runtime, so every scene pins `seed=1` and the customer
+ * numbers below are that week's layout — printed by `npm run audit`, which is
+ * where to look again if a pool changes and a scene stops showing its rule.
+ *
+ *   day 1  ·        amount   ·        amount
+ *   day 2  expiry   ·        recipient ·      amount
+ *   day 3  ·        screenshot ·      ·       duplicate  staticQr     (sticker)
+ *   day 4  ·        currency ·        rate    bankMismatch ·
+ *   day 5  ·        ·        ·        currency duplicate recipient staticQr
+ */
+const SEED = 'seed=1'
+const at = (day, c) => `/?${SEED}&day=${day}${c ? `&c=${c}` : ''}`
+
 const SCENES = {
   title: { url: '/', wait: 'title' },
-  morning: { url: '/?day=5', wait: 'title', click: 'Open the stall' },
-  counter: { url: '/?day=1&c=1', wait: 'stage' },
-  sticker: { url: '/?day=5&c=2', wait: 'stage' },
-  screenshotRule: { url: '/?day=4&c=2', wait: 'stage' },
-  duplicate: { url: '/?day=6&c=2', wait: 'stage' },
-  rate: { url: '/?day=7&c=2', wait: 'stage' },
-  bankCode: { url: '/?day=8&c=2', wait: 'stage', rulebook: true },
-  currency: { url: '/?day=9&c=2', wait: 'stage' },
-  finale: { url: '/?day=10&c=5', wait: 'stage' },
-  served: { url: '/?day=1&c=1', wait: 'stage', drag: ['.tool--plate', '.booth__hatch'], settle: 900 },
-  citation: { url: '/?day=1&c=2', wait: 'stage', drag: ['.tool--plate', '.booth__hatch'], settle: 900 },
-  refused: { url: '/?day=5&c=2', wait: 'stage', drag: ['.tool--stamp', '.desk__phone'], settle: 700 },
-  ledger: { url: '/?day=1&c=1', wait: 'stage', playDay: true },
+  morning: { url: at(3), wait: 'title', click: 'Open the stall' },
+  counter: { url: at(1, 1), wait: 'stage' },
+  sticker: { url: at(3, 6), wait: 'stage' },
+  screenshotRule: { url: at(3, 2), wait: 'stage' },
+  duplicate: { url: at(3, 5), wait: 'stage' },
+  rate: { url: at(4, 4), wait: 'stage' },
+  bankCode: { url: at(4, 5), wait: 'stage', rulebook: true },
+  currency: { url: at(4, 2), wait: 'stage' },
+  finale: { url: at(5, 7), wait: 'stage' },
+  served: { url: at(1, 1), wait: 'stage', drag: ['.tool--plate', '.booth__hatch'], settle: 900 },
+  citation: { url: at(1, 2), wait: 'stage', drag: ['.tool--plate', '.booth__hatch'], settle: 900 },
+  refused: { url: at(3, 6), wait: 'stage', drag: ['.tool--stamp', '.desk__phone'], settle: 700 },
+  ledger: { url: at(1, 1), wait: 'stage', playDay: true },
+  // The whole week, so the star screen is captured from a real run rather than a fixture.
+  summary: { url: at(1, 1), wait: 'stage', playWeek: true },
   // Mid-drag: the drop zones have to light up while the tool is still in hand.
-  dragPlate: { url: '/?day=1&c=1', wait: 'stage', hold: ['.tool--plate', '.booth__hatch'] },
-  dragStamp: { url: '/?day=1&c=1', wait: 'stage', hold: ['.tool--stamp', '.desk__phone'] },
+  dragPlate: { url: at(1, 1), wait: 'stage', hold: ['.tool--plate', '.booth__hatch'] },
+  dragStamp: { url: at(1, 1), wait: 'stage', hold: ['.tool--stamp', '.desk__phone'] },
 }
 
 /** Drag with intermediate moves — a single jump skips the pointermove handler. */
@@ -159,31 +176,59 @@ for (const [name, scene] of Object.entries(scenes)) {
     await new Promise((r) => setTimeout(r, scene.settle ?? 800))
   }
 
-  if (scene.playDay) {
+  if (scene.playDay || scene.playWeek) {
     // Serve the genuine ones, stamp the rest, until the ledger appears.
-    for (let step = 0; step < 20; step++) {
-      const state = await page.evaluate(() => {
-        if (document.querySelector('.ledger')) return 'done'
-        const next = [...document.querySelectorAll('button')].find(
-          (b) => b.textContent?.trim().toLowerCase() === 'next customer',
-        )
-        if (next) { next.click(); return 'advanced' }
-        // Serve only when the receipt agrees with the POS total, is still counting
-        // down, and went to our account.
-        const amount = document.querySelector('.receipt__amount')?.textContent?.replace(/\s/g, '') ?? ''
-        const due = document.querySelector('.pos__total span:last-child')?.textContent?.replace(/\s/g, '') ?? ''
-        const live = !!document.querySelector('.receipt__pulse')
-        const acct = [...document.querySelectorAll('.receipt__row')].find((r) =>
-          r.textContent?.startsWith('Account'),
-        )?.textContent ?? ''
-        return amount === due && live && acct.includes('1017286654') ? 'serve' : 'refuse'
-      })
+    for (let step = 0; step < (scene.playWeek ? 260 : 20); step++) {
+      const state = await page.evaluate(
+        (week, decideSrc) => {
+          if (document.querySelector('.summary')) return 'done'
+          if (document.querySelector('.ledger')) {
+            if (!week) return 'done'
+            // Keep the week rolling: close the day, then open the next one.
+            const on = [...document.querySelectorAll('button')].find((b) =>
+              /lock up|finish the week|open up again/i.test(b.textContent ?? ''),
+            )
+            if (on) { on.click(); return 'advanced' }
+            return 'done'
+          }
+          const morning = [...document.querySelectorAll('button')].find((b) =>
+            /start the day/i.test(b.textContent ?? ''),
+          )
+          if (morning && week) { morning.click(); return 'advanced' }
+          const next = [...document.querySelectorAll('button')].find(
+            (b) => b.textContent?.trim().toLowerCase() === 'next customer',
+          )
+          if (next) { next.click(); return 'advanced' }
+          // eslint-disable-next-line no-new-func
+          const decide = new Function(`return (${decideSrc})`)()
+          return decide().call
+        },
+        Boolean(scene.playWeek),
+        decide.toString(),
+      )
       if (state === 'done') break
+      if (scene.playWeek && step % 20 === 0) {
+        const at = await page.evaluate(() => {
+          const d = document.querySelector('.track--compact .track__stage.is-here .track__node')
+          return d?.textContent ?? document.querySelector('.card__kicker')?.textContent ?? '?'
+        })
+        console.log(`    … step ${step}, ${state}, at ${at}`)
+      }
       if (state === 'serve') await dragTo(page, '.tool--plate', '.booth__hatch')
       else if (state === 'refuse') await dragTo(page, '.tool--stamp', '.desk__phone')
-      await new Promise((r) => setTimeout(r, 360))
+      await new Promise((r) => setTimeout(r, scene.playWeek ? 180 : 360))
     }
-    await new Promise((r) => setTimeout(r, 450))
+    await new Promise((r) => setTimeout(r, scene.playWeek ? 1600 : 450))
+    if (scene.playWeek) {
+      const stars = await page.evaluate(() => ({
+        summary: !!document.querySelector('.summary'),
+        won: document.querySelectorAll('.stars__s.is-won').length,
+        total: document.querySelectorAll('.stars__s').length,
+      }))
+      if (!stars.summary) { console.log(`  ! ${name}: never reached the end-of-week screen`); failures++ }
+      else if (stars.total !== 3) { console.log(`  ! ${name}: expected 3 star slots, saw ${stars.total}`); failures++ }
+      else console.log(`  ${'week'.padEnd(16)} finished with ${stars.won}/3 stars`)
+    }
   }
 
   if (scene.click) {
@@ -225,6 +270,46 @@ for (const [name, scene] of Object.entries(scenes)) {
     if (timer && !(timer.inside && timer.onScreen && timer.lastRowInside)) {
       console.log(
         `  ! ${name}: receipt clipped (timer inside=${timer.inside} onScreen=${timer.onScreen} lastRow=${timer.lastRowInside})`,
+      )
+      failures++
+    }
+  }
+
+  // The timeline is the only thing telling you how much week is left, so it has
+  // to be present, complete, and actually inside the board it sits in.
+  if (scene.wait === 'stage') {
+    const track = await page.evaluate(() => {
+      // Scenes that end on a card (the ledger, the summary) have no board.
+      if (document.querySelector('.card') || document.querySelector('.summary')) return 'n/a'
+      const t = document.querySelector('.track--compact')
+      const board = document.querySelector('.pp__board')
+      if (!t || !board) return null
+      const tb = t.getBoundingClientRect()
+      const bb = board.getBoundingClientRect()
+      return {
+        stages: t.querySelectorAll('.track__node').length,
+        here: t.querySelectorAll('.track__stage.is-here').length,
+        inside: tb.left >= bb.left - 1 && tb.right <= bb.right + 1 && tb.bottom <= bb.bottom,
+      }
+    })
+    // The board overflows silently: the desk is painted after it, so anything
+    // past the bottom of the column simply disappears under the counter.
+    const spill = await page.evaluate(() => {
+      const board = document.querySelector('.pp__board')
+      const desk = document.querySelector('.desk')
+      if (!board || !desk) return null
+      const last = board.lastElementChild?.getBoundingClientRect()
+      return last ? Math.round(last.bottom - desk.getBoundingClientRect().top) : null
+    })
+    if (spill !== null && spill > 0) {
+      console.log(`  ! ${name}: board runs ${spill}px under the desk — the strike dots are hidden`)
+      failures++
+    }
+
+    if (track === null) { console.log(`  ! ${name}: no stage timeline on the board`); failures++ }
+    else if (track !== 'n/a' && (track.stages !== 5 || track.here !== 1 || !track.inside)) {
+      console.log(
+        `  ! ${name}: timeline wrong (stages=${track?.stages} current=${track?.here} inside=${track?.inside})`,
       )
       failures++
     }
